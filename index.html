@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>자연스러운 불안정함 — Fluid</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --app-bg:#141419;
+    --ink:#EFEFEF;
+    --muted:#9A9AA3;
+    --track:rgba(255,255,255,.15);
+  }
+  html,body{height:100%;background:#0E0E12;color:var(--ink)}
+  body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E")}
+
+  .frame{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:14px}
+
+  /* APP window - replicates original: top bar(3 dots), fluid viewport, bottom control bar */
+  .app{
+    position:relative;width:min(920px,96vw);
+    background:var(--app-bg);
+    border:1px solid rgba(255,255,255,.07);
+    border-radius:14px;
+    box-shadow:0 30px 90px rgba(0,0,0,.65),0 4px 18px rgba(0,0,0,.5);
+    overflow:hidden;display:flex;flex-direction:column;
+  }
+  .app-top{height:32px;display:flex;align-items:center;justify-content:flex-end;padding:0 14px;position:relative;z-index:4}
+  .menu-dots{display:flex;gap:4px;cursor:pointer;padding:6px}
+  .menu-dots span{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.55)}
+
+  .viewport{position:relative;margin:0 14px;min-height:320px;aspect-ratio:848/718;background:#0A1E0F;border-radius:10px;overflow:hidden}
+  .viewport canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+
+  .hint{
+    position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;
+    background:rgba(8,10,8,.6);backdrop-filter:blur(8px);color:#E8F0E4;
+    border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:5px 12px;
+    font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;pointer-events:none;transition:opacity .3s;
+  }
+
+  .control-bar{padding:12px 16px 14px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:4;
+    background:linear-gradient(180deg,rgba(20,20,25,.4),rgba(20,20,25,.88));border-top:1px solid rgba(255,255,255,.05)}
+  .ctl-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .ctl{display:flex;align-items:center;gap:10px;flex:1;min-width:190px}
+  .ctl label{font-size:12px;color:#D8D8DC;font-weight:500;white-space:nowrap}
+  .ctl .val{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);width:26px;text-align:right}
+  input[type=range]{appearance:none;-webkit-appearance:none;width:120px;height:3px;border-radius:999px;background:var(--track);outline:none;cursor:pointer;touch-action:pan-y}
+  input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+  .icon-btn{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.09);color:#D8D8DC;cursor:pointer;font-size:13px;transition:background .15s}
+  .icon-btn:hover{background:rgba(255,255,255,.14)}
+  .icon-btn.sm{width:22px;height:22px;font-size:11px}
+
+  .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em}
+  .meta .right{display:flex;gap:12px;align-items:center}
+  .btn{border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:7px 14px;background:rgba(255,255,255,.06);color:var(--ink);cursor:pointer;font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;transition:.15s}
+  .btn:hover{background:rgba(255,255,255,.12)}
+
+  /* ---- MOBILE (MW) ---- */
+  @media (max-width: 700px){
+    body{overflow:auto;-webkit-overflow-scrolling:touch}
+    .frame{min-height:100dvh;padding:10px;gap:10px;justify-content:flex-start}
+    .app{width:100%;border-radius:12px}
+    .app-top{height:28px;padding:0 10px}
+    .viewport{margin:0 10px;min-height:0;aspect-ratio:848/718;border-radius:8px}
+    .hint{font-size:10px;padding:4px 10px;top:8px;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+    .control-bar{padding:10px 12px 12px;gap:8px}
+    .ctl-row{gap:8px}
+    .ctl{min-width:0;flex:1;gap:8px}
+    .ctl label{font-size:12px}
+    .ctl .val{width:22px;font-size:11px}
+    input[type=range]{width:100%;min-width:0}
+    .meta{font-size:10px}
+    .btn{padding:6px 10px;font-size:10px}
+    .icon-btn{width:24px;height:24px;font-size:12px}
+    .icon-btn.sm{width:20px;height:20px;font-size:10px}
+  }
+  /* extra small */
+  @media (max-width: 380px){
+    .ctl-row{flex-direction:column;align-items:stretch}
+    .ctl{width:100%}
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="app">
+    <div class="app-top">
+      <div class="menu-dots"><span></span><span></span><span></span></div>
+    </div>
+    <div class="viewport" id="vp">
+      <canvas id="c"></canvas>
+      <div class="hint">드래그하면 잉크가 흘러요 · Space로 잉크 뿌리기</div>
+    </div>
+    <div class="control-bar">
+      <div class="ctl-row">
+        <div class="ctl"><label>속도</label><input type="range" id="spd" min="0" max="100" value="69"><span class="val" id="spdV">69</span></div>
+        <div class="ctl"><label>외곡</label><input type="range" id="dist" min="0" max="100" value="40"><span class="val" id="distV">40</span></div>
+        <button class="icon-btn" title="설정">⋯</button>
+      </div>
+      <div class="ctl-row">
+        <div class="ctl"><label>결 밀도</label><input type="range" id="grain" min="0" max="100" value="35"><span class="val" id="grainV">35</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="icon-btn sm" onclick="splatBurst()" title="잉크 뿌리기">✦</button>
+          <button class="icon-btn sm" onclick="resetInk()" title="리셋">↺</button>
+        </div>
+      </div>
+      <div class="meta">
+        <span>WebGL Fluid · olive-ink</span>
+        <div class="right"><span id="fps">-- fps</span><button class="btn" onclick="togglePause()" id="pauseBtn">⏸ Pause</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="fluid.js"></script>
+<script>
+/* ---- UI bindings to global fluid config ---- */
+const $spd=document.getElementById('spd'),$dist=document.getElementById('dist'),$grain=document.getElementById('grain');
+const $spdV=document.getElementById('spdV'),$distV=document.getElementById('distV'),$grainV=document.getElementById('grainV');
+$spd.addEventListener('input',e=>{
+  const v=e.target.value/100;
+  config.VELOCITY_DISSIPATION=0.18+(1-v)*0.22;
+  config.DENSITY_DISSIPATION=0.16+v*0.25;
+  $spdV.textContent=e.target.value;
+});
+$dist.addEventListener('input',e=>{
+  const v=e.target.value/100;
+  config.CURL=6+v*44;
+  $distV.textContent=e.target.value;
+});
+$grain.addEventListener('input',e=>{
+  const v=e.target.value/100;
+  config.DYE_RESOLUTION = v>0.66?1024:v>0.33?720:512;
+  $grainV.textContent=e.target.value;
+});
+config.VELOCITY_DISSIPATION=0.18+(1-0.69)*0.22;
+config.DENSITY_DISSIPATION=0.22;
+config.CURL=6+0.40*44;
+
+function splatBurst(){ multipleSplats(parseInt(Math.random()*14)+5); }
+function resetInk(){
+  splat(0.3,0.42,300,-120, generateColor());
+  splat(0.62,0.30,-200,100, generateColor());
+  splat(0.5,0.55,60,200, generateColor());
+  multipleSplats(4);
+}
+function togglePause(){ config.PAUSED=!config.PAUSED; document.getElementById('pauseBtn').textContent=config.PAUSED?'▶ Play':'⏸ Pause'; }
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();splatBurst();}
+  if(e.code==='KeyP'){togglePause();}
+});
+
+/* auto-flow: keep ink drifting like the original video */
+(function autoFlow(){
+  if(!config.PAUSED && parseFloat($spd.value)>5){
+    multipleSplats(Math.random()<0.5 ? 1 : 2);
+  }
+  setTimeout(autoFlow, 1500 + Math.random()*1200);
+})();
+
+/* fps meter */
+let frames=0,lastFps=performance.now();
+setInterval(()=>{ const now=performance.now(); const fps=Math.round(frames*1000/(now-lastFps)); document.getElementById('fps').textContent=fps+' fps'; frames=0; lastFps=now; },1000);
+setInterval(()=>{frames++;},1);
+
+/* mobile: lower dye res for perf */
+if (isMobile()) config.DYE_RESOLUTION = 512;
+</script>
+</body>
+</html>
