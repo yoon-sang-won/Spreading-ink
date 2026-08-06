@@ -49,7 +49,7 @@ let config = {
     BLOOM: true,
     BLOOM_ITERATIONS: 8,
     BLOOM_RESOLUTION: 256,
-    BLOOM_INTENSITY: 0.8,
+    BLOOM_INTENSITY: 0.3,
     BLOOM_THRESHOLD: 0.6,
     BLOOM_SOFT_KNEE: 0.7,
     SUNRAYS: false,
@@ -1064,7 +1064,7 @@ function updateKeywords () {
 
 updateKeywords();
 initFramebuffers();
-multipleSplats(parseInt(Math.random() * 18) + 20);
+multipleSplats(parseInt(Math.random() * 6) + 6);
 
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
@@ -1384,21 +1384,25 @@ canvas.addEventListener('touchstart', e => {
     const touches = e.targetTouches;
     while (touches.length >= pointers.length)
         pointers.push(new pointerPrototype());
+    const rect = canvas.getBoundingClientRect();
     for (let i = 0; i < touches.length; i++) {
-        let posX = scaleByPixelRatio(touches[i].pageX);
-        let posY = scaleByPixelRatio(touches[i].pageY);
+        let posX = scaleByPixelRatio(touches[i].pageX - rect.left);
+        let posY = scaleByPixelRatio(touches[i].pageY - rect.top);
         updatePointerDownData(pointers[i + 1], touches[i].identifier, posX, posY);
+        // immediate ink drop on touch for snappier mobile feel
+        splat((touches[i].pageX - rect.left) / rect.width, 1.0 - (touches[i].pageY - rect.top) / rect.height, 0, 0, generateColor());
     }
 });
 
 canvas.addEventListener('touchmove', e => {
     e.preventDefault();
     const touches = e.targetTouches;
+    const rect = canvas.getBoundingClientRect();
     for (let i = 0; i < touches.length; i++) {
         let pointer = pointers[i + 1];
         if (!pointer.down) continue;
-        let posX = scaleByPixelRatio(touches[i].pageX);
-        let posY = scaleByPixelRatio(touches[i].pageY);
+        let posX = scaleByPixelRatio(touches[i].pageX - rect.left);
+        let posY = scaleByPixelRatio(touches[i].pageY - rect.top);
         updatePointerMoveData(pointer, posX, posY);
     }
 }, false);
@@ -1461,10 +1465,10 @@ function correctDeltaY (delta) {
 
 function generateColor () {
     // olive-ink, brighter so it reads on screen
-    let c = HSVtoRGB(0.24 + Math.random() * 0.05, 0.85, 0.95);
-    c.r *= 0.6;
-    c.g *= 0.6;
-    c.b *= 0.6;
+    let c = HSVtoRGB(0.24 + Math.random() * 0.05, 0.75, 0.88);
+    c.r *= 0.30;
+    c.g *= 0.30;
+    c.b *= 0.30;
     return c;
 }
 

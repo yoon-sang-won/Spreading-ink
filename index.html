@@ -66,18 +66,20 @@
     .frame{min-height:100dvh;padding:10px;gap:10px;justify-content:flex-start}
     .app{width:100%;border-radius:12px}
     .app-top{height:28px;padding:0 10px}
-    .viewport{margin:0 10px;min-height:0;aspect-ratio:848/718;border-radius:8px}
+    .viewport{margin:0 10px;min-height:0;aspect-ratio:848/718;border-radius:8px;touch-action:none}
     .hint{font-size:10px;padding:4px 10px;top:8px;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
     .control-bar{padding:10px 12px 12px;gap:8px}
     .ctl-row{gap:8px}
     .ctl{min-width:0;flex:1;gap:8px}
     .ctl label{font-size:12px}
     .ctl .val{width:22px;font-size:11px}
-    input[type=range]{width:100%;min-width:0}
+    input[type=range]{width:100%;min-width:0;height:4px}
+    input[type=range]::-webkit-slider-thumb{width:18px;height:18px}
     .meta{font-size:10px}
     .btn{padding:6px 10px;font-size:10px}
     .icon-btn{width:24px;height:24px;font-size:12px}
     .icon-btn.sm{width:20px;height:20px;font-size:10px}
+    .icon-btn.primary-action{width:44px;height:44px;font-size:20px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2)}
   }
   /* extra small */
   @media (max-width: 380px){
@@ -105,8 +107,8 @@
       </div>
       <div class="ctl-row">
         <div class="ctl"><label>결 밀도</label><input type="range" id="grain" min="0" max="100" value="35"><span class="val" id="grainV">35</span></div>
-        <div style="display:flex;gap:8px">
-          <button class="icon-btn sm" onclick="splatBurst()" title="잉크 뿌리기">✦</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="icon-btn primary-action" onclick="splatBurst()" title="잉크 뿌리기">✦</button>
           <button class="icon-btn sm" onclick="resetInk()" title="리셋">↺</button>
         </div>
       </div>
@@ -155,14 +157,6 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();splatBurst();}
   if(e.code==='KeyP'){togglePause();}
 });
-
-/* auto-flow: keep ink drifting like the original video */
-(function autoFlow(){
-  if(!config.PAUSED && parseFloat($spd.value)>5){
-    multipleSplats(Math.random()<0.5 ? 1 : 2);
-  }
-  setTimeout(autoFlow, 1500 + Math.random()*1200);
-})();
 
 /* fps meter */
 let frames=0,lastFps=performance.now();
