@@ -1336,12 +1336,16 @@ function multipleSplats (amount) {
 }
 
 function splat (x, y, dx, dy, color) {
+    // resolution-aware ink size: set by index.html (0.55 on mobile ~ 1.0 on desktop)
+    const sizeScale = (typeof window.__fluidSizeScale === 'number') ? window.__fluidSizeScale : 1.0;
+    const radius = correctRadius((config.SPLAT_RADIUS / 100.0) * sizeScale);
+    const forceScale = sizeScale;
     splatProgram.bind();
     gl.uniform1i(splatProgram.uniforms.uTarget, velocity.read.attach(0));
     gl.uniform1f(splatProgram.uniforms.aspectRatio, canvas.width / canvas.height);
     gl.uniform2f(splatProgram.uniforms.point, x, y);
-    gl.uniform3f(splatProgram.uniforms.color, dx, dy, 0.0);
-    gl.uniform1f(splatProgram.uniforms.radius, correctRadius(config.SPLAT_RADIUS / 100.0));
+    gl.uniform3f(splatProgram.uniforms.color, dx * forceScale, dy * forceScale, 0.0);
+    gl.uniform1f(splatProgram.uniforms.radius, radius);
     blit(velocity.write);
     velocity.swap();
 

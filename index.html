@@ -2,129 +2,151 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <title>자연스러운 불안정함 — Fluid</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
   *{margin:0;padding:0;box-sizing:border-box}
   :root{
-    --app-bg:#141419;
     --ink:#EFEFEF;
     --muted:#9A9AA3;
-    --track:rgba(255,255,255,.15);
+    --track:rgba(255,255,255,.2);
   }
-  html,body{height:100%;background:#0E0E12;color:var(--ink)}
-  body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+  html,body{height:100%;background:#0E0E12;color:var(--ink);overflow:hidden}
+  body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
   body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E")}
 
-  .frame{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:14px}
+  /* FULLSCREEN canvas stage */
+  .stage{position:fixed;inset:0;z-index:1}
+  .stage canvas{width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
 
-  /* APP window - replicates original: top bar(3 dots), fluid viewport, bottom control bar */
-  .app{
-    position:relative;width:min(920px,96vw);
-    background:var(--app-bg);
-    border:1px solid rgba(255,255,255,.07);
-    border-radius:14px;
-    box-shadow:0 30px 90px rgba(0,0,0,.65),0 4px 18px rgba(0,0,0,.5);
-    overflow:hidden;display:flex;flex-direction:column;
-  }
-  .app-top{height:32px;display:flex;align-items:center;justify-content:flex-end;padding:0 14px;position:relative;z-index:4}
-  .menu-dots{display:flex;gap:4px;cursor:pointer;padding:6px}
-  .menu-dots span{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.55)}
-
-  .viewport{position:relative;margin:0 14px;min-height:320px;aspect-ratio:848/718;background:#0A1E0F;border-radius:10px;overflow:hidden}
-  .viewport canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
-
+  /* hint pill - top center */
   .hint{
-    position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;
-    background:rgba(8,10,8,.6);backdrop-filter:blur(8px);color:#E8F0E4;
-    border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:5px 12px;
-    font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;pointer-events:none;transition:opacity .3s;
+    position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:10;
+    background:rgba(8,10,8,.55);backdrop-filter:blur(10px);color:#E8F0E4;
+    border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:7px 14px;
+    font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;pointer-events:none;transition:opacity .4s;
+    white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis;
   }
 
-  .control-bar{padding:12px 16px 14px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:4;
-    background:linear-gradient(180deg,rgba(20,20,25,.4),rgba(20,20,25,.88));border-top:1px solid rgba(255,255,255,.05)}
-  .ctl-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  .ctl{display:flex;align-items:center;gap:10px;flex:1;min-width:190px}
-  .ctl label{font-size:12px;color:#D8D8DC;font-weight:500;white-space:nowrap}
+  /* top-right 3-dot menu */
+  .menu-dots{
+    position:fixed;top:14px;right:16px;z-index:10;
+    display:flex;gap:5px;cursor:pointer;padding:8px;
+    background:rgba(8,10,8,.4);border-radius:999px;backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.1);
+  }
+  .menu-dots span{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.65)}
+
+  /* ---- BOTTOM CONTROL OVERLAY (semi-transparent) ---- */
+  .controls{
+    position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    z-index:10;width:min(720px,calc(100vw - 20px));
+    background:rgba(16,18,20,.55);backdrop-filter:blur(18px) saturate(1.2);
+    border:1px solid rgba(255,255,255,.12);border-radius:20px;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+    padding:14px 18px 16px;
+    display:flex;flex-direction:column;gap:10px;
+    -webkit-user-select:none;user-select:none;
+  }
+  .controls .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .ctl{display:flex;align-items:center;gap:10px;flex:1;min-width:170px}
+  .ctl label{font-size:12px;color:#E2E2E6;font-weight:500;white-space:nowrap}
   .ctl .val{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);width:26px;text-align:right}
-  input[type=range]{appearance:none;-webkit-appearance:none;width:120px;height:3px;border-radius:999px;background:var(--track);outline:none;cursor:pointer;touch-action:pan-y}
-  input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
-  .icon-btn{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.09);color:#D8D8DC;cursor:pointer;font-size:13px;transition:background .15s}
-  .icon-btn:hover{background:rgba(255,255,255,.14)}
-  .icon-btn.sm{width:22px;height:22px;font-size:11px}
+  input[type=range]{appearance:none;-webkit-appearance:none;width:120px;height:4px;border-radius:999px;background:var(--track);outline:none;cursor:pointer;touch-action:none}
+  input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+  .btn{
+    border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:7px 13px;
+    background:rgba(255,255,255,.08);color:var(--ink);cursor:pointer;
+    font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;transition:.15s;white-space:nowrap;
+  }
+  .btn:hover{background:rgba(255,255,255,.16)}
+  .btn.on{background:#fff;color:#141419;border-color:#fff}
+  .actions{display:flex;gap:8px;align-items:center}
+  .icon-btn{
+    width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;cursor:pointer;font-size:16px;transition:background .15s;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.2)}
+  .meta{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    color:var(--muted);font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+  }
 
-  .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em}
-  .meta .right{display:flex;gap:12px;align-items:center}
-  .btn{border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:7px 14px;background:rgba(255,255,255,.06);color:var(--ink);cursor:pointer;font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;transition:.15s}
-  .btn:hover{background:rgba(255,255,255,.12)}
-
-  /* ---- MOBILE (MW) ---- */
+  /* ---- MOBILE ---- */
   @media (max-width: 700px){
-    body{overflow:auto;-webkit-overflow-scrolling:touch}
-    .frame{min-height:100dvh;padding:10px;gap:10px;justify-content:flex-start}
-    .app{width:100%;border-radius:12px}
-    .app-top{height:28px;padding:0 10px}
-    .viewport{margin:0 10px;min-height:0;aspect-ratio:848/718;border-radius:8px;touch-action:none}
-    .hint{font-size:10px;padding:4px 10px;top:8px;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
-    .control-bar{padding:10px 12px 12px;gap:8px}
-    .ctl-row{gap:8px}
-    .ctl{min-width:0;flex:1;gap:8px}
+    .hint{top:10px;font-size:10px;padding:6px 12px}
+    .menu-dots{top:10px;right:12px}
+    .controls{bottom:calc(10px + env(safe-area-inset-bottom));width:calc(100vw - 12px);border-radius:18px;padding:12px 14px 14px;gap:8px}
+    .controls .row{gap:8px}
+    .ctl{min-width:0;gap:8px}
     .ctl label{font-size:12px}
     .ctl .val{width:22px;font-size:11px}
-    input[type=range]{width:100%;min-width:0;height:4px}
-    input[type=range]::-webkit-slider-thumb{width:18px;height:18px}
-    .meta{font-size:10px}
-    .btn{padding:6px 10px;font-size:10px}
-    .icon-btn{width:24px;height:24px;font-size:12px}
-    .icon-btn.sm{width:20px;height:20px;font-size:10px}
-    .icon-btn.primary-action{width:44px;height:44px;font-size:20px;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2)}
+    input[type=range]{width:100%;min-width:0;height:5px}
+    input[type=range]::-webkit-slider-thumb{width:20px;height:20px}
+    .icon-btn{width:40px;height:40px;font-size:18px}
+    .btn{padding:7px 12px;font-size:10px}
   }
-  /* extra small */
   @media (max-width: 380px){
-    .ctl-row{flex-direction:column;align-items:stretch}
+    .controls .row{flex-direction:column;align-items:stretch}
     .ctl{width:100%}
+    .actions{justify-content:space-between}
   }
 </style>
 </head>
 <body>
 
-<div class="frame">
-  <div class="app">
-    <div class="app-top">
-      <div class="menu-dots"><span></span><span></span><span></span></div>
+<div class="stage" id="vp">
+  <canvas id="c"></canvas>
+</div>
+
+<div class="hint" id="hint">드래그하면 잉크가 흘러요 · 탭하면 잉크 방울</div>
+<div class="menu-dots"><span></span><span></span><span></span></div>
+
+<div class="controls" id="controls">
+  <div class="row">
+    <div class="ctl"><label>속도</label><input type="range" id="spd" min="0" max="100" value="69"><span class="val" id="spdV">69</span></div>
+    <div class="ctl"><label>외곡</label><input type="range" id="dist" min="0" max="100" value="40"><span class="val" id="distV">40</span></div>
+    <div class="ctl"><label>굵기</label><input type="range" id="size" min="0" max="100" value="30"><span class="val" id="sizeV">30</span></div>
+  </div>
+  <div class="row" style="justify-content:space-between">
+    <div class="actions">
+      <button class="btn" onclick="splatBurst()" title="잉크 뿌리기">✦ 뿌리기</button>
+      <button class="btn" onclick="resetInk()" title="리셋">↺ 리셋</button>
+      <button class="btn" onclick="togglePause()" id="pauseBtn" title="일시정지">⏸</button>
     </div>
-    <div class="viewport" id="vp">
-      <canvas id="c"></canvas>
-      <div class="hint">드래그하면 잉크가 흘러요 · Space로 잉크 뿌리기</div>
-    </div>
-    <div class="control-bar">
-      <div class="ctl-row">
-        <div class="ctl"><label>속도</label><input type="range" id="spd" min="0" max="100" value="69"><span class="val" id="spdV">69</span></div>
-        <div class="ctl"><label>외곡</label><input type="range" id="dist" min="0" max="100" value="40"><span class="val" id="distV">40</span></div>
-        <button class="icon-btn" title="설정">⋯</button>
-      </div>
-      <div class="ctl-row">
-        <div class="ctl"><label>결 밀도</label><input type="range" id="grain" min="0" max="100" value="35"><span class="val" id="grainV">35</span></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="icon-btn primary-action" onclick="splatBurst()" title="잉크 뿌리기">✦</button>
-          <button class="icon-btn sm" onclick="resetInk()" title="리셋">↺</button>
-        </div>
-      </div>
-      <div class="meta">
-        <span>WebGL Fluid · olive-ink</span>
-        <div class="right"><span id="fps">-- fps</span><button class="btn" onclick="togglePause()" id="pauseBtn">⏸ Pause</button></div>
-      </div>
-    </div>
+    <div class="meta"><span id="resTag">--</span><span id="fps">-- fps</span></div>
   </div>
 </div>
 
 <script src="fluid.js"></script>
 <script>
-/* ---- UI bindings to global fluid config ---- */
-const $spd=document.getElementById('spd'),$dist=document.getElementById('dist'),$grain=document.getElementById('grain');
-const $spdV=document.getElementById('spdV'),$distV=document.getElementById('distV'),$grainV=document.getElementById('grainV');
+/* ---- resolution-aware ink size ----
+   기준: 데스크톱(>=1280px)에서는 기본 굵기 100%
+   모바일/작은 화면에서는 손가락 터치에 맞게 굵기를 자동 축소 (55%) */
+const MIN_EDGE = 360;   // 이보다 작은 화면은 굵기 55%
+const MAX_EDGE = 1280;  // 이보다 큰 화면은 굵기 100%
+function edgeSize(){
+  return Math.max(window.innerWidth, window.innerHeight);
+}
+function sizeScale(){
+  const e = edgeSize();
+  const t = Math.min(1, Math.max(0, (e - MIN_EDGE) / (MAX_EDGE - MIN_EDGE)));
+  return 0.55 + 0.45 * t;   // 0.55 ~ 1.0
+}
+let userSize = 30;   // 슬라이더 0~100
+function applySizeScale(){
+  const s = sizeScale() * (0.55 + userSize / 100);
+  window.__fluidSizeScale = s;
+}
+applySizeScale();
+window.addEventListener('resize', applySizeScale);
+
+/* ---- UI bindings ---- */
+const $spd=document.getElementById('spd'),$dist=document.getElementById('dist'),$grain=document.getElementById('size');
+const $spdV=document.getElementById('spdV'),$distV=document.getElementById('distV'),$grainV=document.getElementById('sizeV');
+const $resTag=document.getElementById('resTag');
 $spd.addEventListener('input',e=>{
   const v=e.target.value/100;
   config.VELOCITY_DISSIPATION=0.18+(1-v)*0.22;
@@ -137,31 +159,36 @@ $dist.addEventListener('input',e=>{
   $distV.textContent=e.target.value;
 });
 $grain.addEventListener('input',e=>{
-  const v=e.target.value/100;
-  config.DYE_RESOLUTION = v>0.66?1024:v>0.33?720:512;
+  userSize=e.target.value;
   $grainV.textContent=e.target.value;
+  applySizeScale();
 });
 config.VELOCITY_DISSIPATION=0.18+(1-0.69)*0.22;
 config.DENSITY_DISSIPATION=0.22;
 config.CURL=6+0.40*44;
 
-function splatBurst(){ multipleSplats(parseInt(Math.random()*14)+5); }
+function splatBurst(){ multipleSplats(parseInt(Math.random()*12)+5); }
 function resetInk(){
   splat(0.3,0.42,300,-120, generateColor());
   splat(0.62,0.30,-200,100, generateColor());
   splat(0.5,0.55,60,200, generateColor());
   multipleSplats(4);
 }
-function togglePause(){ config.PAUSED=!config.PAUSED; document.getElementById('pauseBtn').textContent=config.PAUSED?'▶ Play':'⏸ Pause'; }
+function togglePause(){ config.PAUSED=!config.PAUSED; document.getElementById('pauseBtn').textContent=config.PAUSED?'▶':'⏸'; }
 window.addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();splatBurst();}
   if(e.code==='KeyP'){togglePause();}
 });
 
-/* fps meter */
+/* fps + res tag */
 let frames=0,lastFps=performance.now();
 setInterval(()=>{ const now=performance.now(); const fps=Math.round(frames*1000/(now-lastFps)); document.getElementById('fps').textContent=fps+' fps'; frames=0; lastFps=now; },1000);
 setInterval(()=>{frames++;},1);
+function updateResTag(){
+  $resTag.textContent = Math.round(edgeSize())+'px · 굵기 '+Math.round(sizeScale()*100)+'%';
+}
+updateResTag();
+window.addEventListener('resize', updateResTag);
 
 /* mobile: lower dye res for perf */
 if (isMobile()) config.DYE_RESOLUTION = 512;
