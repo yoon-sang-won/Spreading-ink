@@ -219,24 +219,8 @@ function buildPalette(){
 }
 buildPalette();
 
-/* generateColor 대체: 선택한 색 기반으로 밝기 변주 잉크 생성 */
+/* generateColor는 fluid.js 내부에서 window.__fluidInkColor를 직접 읽음 */
 window.__fluidInkColor = activeColor;
-function makeInkColor(){
-  const base = hexToRgb(window.__fluidInkColor);
-  // 밝기 변주 (0.75~1.0) + 미세 색조 변주로 자연스러운 수채 느낌
-  const lit = 0.7 + Math.random() * 0.3;
-  const jitter = 1 + (Math.random() - 0.5) * 0.12;
-  return {
-    r: Math.min(255, Math.round(base.r * lit * jitter)),
-    g: Math.min(255, Math.round(base.g * lit * jitter)),
-    b: Math.min(255, Math.round(base.b * lit * jitter))
-  };
-}
-// fluid.js의 generateColor를 오버라이드 (0~1 스케일 유지)
-window.generateColor = function(){
-  const c = makeInkColor();
-  return { r: c.r / 255, g: c.g / 255, b: c.b / 255 };
-};
 
 /* ---- UI bindings ---- */
 const $spd=document.getElementById('spd'),$dist=document.getElementById('dist'),$grain=document.getElementById('size');

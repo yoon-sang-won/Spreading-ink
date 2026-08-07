@@ -503,10 +503,10 @@ const displayShaderSource = `
         c += bloom;
     #endif
 
-        // saturation-preserving tonemap: only compress extreme luminance,
-        // keeping hue/saturation vivid (no muddying)
+        // soft-knee tonemap: mid-tones stay vivid, only hot highlights are compressed
+        // (prevents white blowout on drag start while keeping ink color)
         float lum = dot(c, vec3(0.299, 0.587, 0.114));
-        float k = (lum + 1.2) / (lum + 1.5);
+        float k = 1.0 / (1.0 + max(0.0, lum - 0.45) * 1.8);
         c *= k;
         float a = max(c.r, max(c.g, c.b));
         gl_FragColor = vec4(c, a);
@@ -1470,12 +1470,16 @@ function correctDeltaY (delta) {
 }
 
 function generateColor () {
-    // olive-ink, brighter so it reads on screen
-    let c = HSVtoRGB(0.24 + Math.random() * 0.05, 0.75, 0.88);
-    c.r *= 0.34;
-    c.g *= 0.34;
-    c.b *= 0.34;
-    return c;
+    // palette-driven ink color (set by index.html via window.__fluidInkColor)
+    let inkHex = (typeof window.__fluidInkColor === 'string') ? window.__fluidInkColor : '#7FB36E';
+    inkHex = inkHex.replace('#', '');
+    let r = parseInt(inkHex.slice(0, 2), 16) || 127;
+    let g = parseInt(inkHex.slice(2, 4), 16) || 179;
+    let b = parseInt(inkHex.slice(4, 6), 16) || 110;
+    // brightness variation for watercolor feel
+    const lit = 0.6 + Math.random() * 0.4;
+    const jitter = 1 + (Math.random() - 0.5) * 0.1;
+    return { r: r / 255 * lit * jitter, g: g / 255 * lit * jitter, b: b / 255 * lit * jitter };
 }
 
 function HSVtoRGB (h, s, v) {
