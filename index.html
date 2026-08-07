@@ -139,15 +139,12 @@
       <button class="btn" onclick="splatBurst()" title="잉크 뿌리기">✦ 뿌리기</button>
       <button class="btn" onclick="resetInk()" title="리셋">↺ 리셋</button>
       <button class="btn" onclick="togglePause()" id="pauseBtn" title="일시정지">⏸</button>
-      <button class="btn" id="btnMotion" title="폰 기울이기/흔들기">○ 움직임</button>
-      <button class="btn" id="btnBlow" title="마이크로 바람 불기">○ 바람</button>
     </div>
     <div class="meta"><span id="resTag">--</span><span id="fps">-- fps</span></div>
   </div>
 </div>
 
 <script src="fluid.js"></script>
-<script src="mobile-input.js"></script>
 <script>
 /* ---- resolution-aware ink size ----
    기준: 데스크톱(>=1280px)에서는 기본 굵기 100%
@@ -276,19 +273,10 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyP'){togglePause();}
 });
 
-/* fps — 실제 rAF 프레임 기반 */
+/* fps + res tag */
 let frames=0,lastFps=performance.now();
-function countFrame(now){
-  frames++;
-  if(now-lastFps>=1000){
-    const fps=Math.round(frames*1000/(now-lastFps));
-    const el=document.getElementById('fps');
-    if(el) el.textContent=fps+' fps';
-    frames=0; lastFps=now;
-  }
-  requestAnimationFrame(countFrame);
-}
-requestAnimationFrame(countFrame);
+setInterval(()=>{ const now=performance.now(); const fps=Math.round(frames*1000/(now-lastFps)); document.getElementById('fps').textContent=fps+' fps'; frames=0; lastFps=now; },1000);
+setInterval(()=>{frames++;},1);
 function updateResTag(){
   $resTag.textContent = Math.round(edgeSize())+'px · 굵기 '+Math.round(sizeScale()*100)+'%';
 }
