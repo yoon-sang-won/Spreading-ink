@@ -30,10 +30,10 @@ const canvas = document.getElementsByTagName('canvas')[0];
 resizeCanvas();
 
 let config = {
-    SIM_RESOLUTION: 128,
+    SIM_RESOLUTION: 256,
     DYE_RESOLUTION: 768,
     CAPTURE_RESOLUTION: 512,
-    DENSITY_DISSIPATION: 0.15,
+    DENSITY_DISSIPATION: 0.28,
     VELOCITY_DISSIPATION: 0.22,
     PRESSURE: 0.8,
     PRESSURE_ITERATIONS: 12,
@@ -506,7 +506,7 @@ const displayShaderSource = `
         // saturation-preserving tonemap: only compress extreme luminance,
         // keeping hue/saturation vivid (no muddying)
         float lum = dot(c, vec3(0.299, 0.587, 0.114));
-        float k = (lum + 1.6) / (lum + 1.9);
+        float k = (lum + 1.2) / (lum + 1.5);
         c *= k;
         float a = max(c.r, max(c.g, c.b));
         gl_FragColor = vec4(c, a);
@@ -1069,7 +1069,6 @@ function updateKeywords () {
 
 updateKeywords();
 initFramebuffers();
-multipleSplats(parseInt(Math.random() * 6) + 6);
 
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
@@ -1353,7 +1352,7 @@ function splat (x, y, dx, dy, color) {
 
     gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
     // mild dampening: keeps drag strokes vivid while preventing white blowout
-    gl.uniform3f(splatProgram.uniforms.color, color.r * 9.5, color.g * 9.5, color.b * 9.5);
+    gl.uniform3f(splatProgram.uniforms.color, color.r * 4.0, color.g * 4.0, color.b * 4.0);
     blit(dye.write);
     dye.swap();
 }
@@ -1542,7 +1541,13 @@ function getTextureScale (texture, width, height) {
 
 /* ---- true reset: clear all fluid state ---- */
 function clearFluid () {
-    // clear velocity field
+    // reset dye to background color (fully clears ink)
+    drawColor(dye.write, normalizeColor(config.BACK_COLOR));
+    dye.swap();
+    drawColor(dye.write, normalizeColor(config.BACK_COLOR));
+    dye.swap();
+
+    // zero out velocity field
     clearProgram.bind();
     gl.uniform1i(clearProgram.uniforms.uTexture, velocity.read.attach(0));
     gl.uniform1f(clearProgram.uniforms.value, 0.0);
@@ -1551,15 +1556,6 @@ function clearFluid () {
     gl.uniform1i(clearProgram.uniforms.uTexture, velocity.read.attach(0));
     blit(velocity.write);
     velocity.swap();
-
-    // clear dye (ink) completely
-    gl.uniform1i(clearProgram.uniforms.uTexture, dye.read.attach(0));
-    gl.uniform1f(clearProgram.uniforms.value, 0.0);
-    blit(dye.write);
-    dye.swap();
-    gl.uniform1i(clearProgram.uniforms.uTexture, dye.read.attach(0));
-    blit(dye.write);
-    dye.swap();
 }
 
 window.clearFluid = clearFluid;
