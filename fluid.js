@@ -81,6 +81,7 @@ function pointerPrototype () {
     this.deltaY = 0;
     this.speed = 0;          // 최근 이동 속도 (velocity 기반 미세 모션용)
     this.dragStarted = false; // threshold 넘어서 drag가 시작됐는지 (click/drag 분리)
+    this.splatCount = 0;     // 이 stroke에서 발생한 splat 수 (클릭 누락 방지)
     this.down = false;
     this.moved = false;
     this.color = [30, 0, 300];
@@ -1354,6 +1355,7 @@ function blur (target, temp, iterations) {
 function splatPointer (pointer) {
     let dx = pointer.deltaX * config.SPLAT_FORCE;
     let dy = pointer.deltaY * config.SPLAT_FORCE;
+    pointer.splatCount++;
     // 미세 모션: 속도에 따라 굵기/힘을 아주 살짝 변화 (느린=묵직, 빠른=가늘게 길게)
     // 과장되지 않도록 ±15% 범위 내에서만 조정
     const v = pointer.speed;
@@ -1425,8 +1427,9 @@ canvas.addEventListener('mousemove', e => {
 window.addEventListener('mouseup', () => {
     const p = pointers[0];
     if (!p.down) return;
-    // drag가 시작되지 않았으면 click으로 간주 → 잉크 방울 1회
-    if (!p.dragStarted) {
+    // click으로 간주하는 경우: drag가 시작 안 됐거나,
+    // threshold를 살짝 넘었지만 splat이 한 번도 없었던 경우 (잉크 방울 보장)
+    if (!p.dragStarted || p.splatCount === 0) {
         splat(p.texcoordX, p.texcoordY, 0, 0, generateColor());
     }
     updatePointerUpData(p);
@@ -1485,6 +1488,7 @@ function updatePointerDownData (pointer, id, posX, posY) {
     pointer.deltaY = 0;
     pointer.speed = 0;          // 새 stroke는 이전 stroke의 velocity와 독립적으로 시작
     pointer.dragStarted = false;
+    pointer.splatCount = 0;
     pointer.color = generateTrailColor();
 }
 
