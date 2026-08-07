@@ -33,7 +33,7 @@ let config = {
     SIM_RESOLUTION: 128,
     DYE_RESOLUTION: 768,
     CAPTURE_RESOLUTION: 512,
-    DENSITY_DISSIPATION: 0.32,
+    DENSITY_DISSIPATION: 0.15,
     VELOCITY_DISSIPATION: 0.22,
     PRESSURE: 0.8,
     PRESSURE_ITERATIONS: 12,
@@ -503,8 +503,11 @@ const displayShaderSource = `
         c += bloom;
     #endif
 
-        // soft tonemap: compress highlights to prevent white blowout while keeping mid-tones
-        c = c / (c + vec3(0.6));
+        // saturation-preserving tonemap: only compress extreme luminance,
+        // keeping hue/saturation vivid (no muddying)
+        float lum = dot(c, vec3(0.299, 0.587, 0.114));
+        float k = (lum + 1.6) / (lum + 1.9);
+        c *= k;
         float a = max(c.r, max(c.g, c.b));
         gl_FragColor = vec4(c, a);
     }
@@ -1326,9 +1329,6 @@ function splatPointer (pointer) {
 function multipleSplats (amount) {
     for (let i = 0; i < amount; i++) {
         const color = generateColor();
-        color.r *= 10.0;
-        color.g *= 10.0;
-        color.b *= 10.0;
         const x = Math.random();
         const y = Math.random();
         const dx = 1000 * (Math.random() - 0.5);
@@ -1353,7 +1353,7 @@ function splat (x, y, dx, dy, color) {
 
     gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
     // mild dampening: keeps drag strokes vivid while preventing white blowout
-    gl.uniform3f(splatProgram.uniforms.color, color.r * 0.72, color.g * 0.72, color.b * 0.72);
+    gl.uniform3f(splatProgram.uniforms.color, color.r * 9.5, color.g * 9.5, color.b * 9.5);
     blit(dye.write);
     dye.swap();
 }
@@ -1538,6 +1538,31 @@ function getTextureScale (texture, width, height) {
         y: height / texture.height
     };
 }
+
+
+/* ---- true reset: clear all fluid state ---- */
+function clearFluid () {
+    // clear velocity field
+    clearProgram.bind();
+    gl.uniform1i(clearProgram.uniforms.uTexture, velocity.read.attach(0));
+    gl.uniform1f(clearProgram.uniforms.value, 0.0);
+    blit(velocity.write);
+    velocity.swap();
+    gl.uniform1i(clearProgram.uniforms.uTexture, velocity.read.attach(0));
+    blit(velocity.write);
+    velocity.swap();
+
+    // clear dye (ink) completely
+    gl.uniform1i(clearProgram.uniforms.uTexture, dye.read.attach(0));
+    gl.uniform1f(clearProgram.uniforms.value, 0.0);
+    blit(dye.write);
+    dye.swap();
+    gl.uniform1i(clearProgram.uniforms.uTexture, dye.read.attach(0));
+    blit(dye.write);
+    dye.swap();
+}
+
+window.clearFluid = clearFluid;
 
 function scaleByPixelRatio (input) {
     let pixelRatio = window.devicePixelRatio || 1;

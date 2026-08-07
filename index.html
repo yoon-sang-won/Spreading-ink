@@ -264,10 +264,8 @@ config.CURL=6+0.40*44;
 
 function splatBurst(){ multipleSplats(parseInt(Math.random()*12)+5); }
 function resetInk(){
-  splat(0.3,0.42,300,-120, generateColor());
-  splat(0.62,0.30,-200,100, generateColor());
-  splat(0.5,0.55,60,200, generateColor());
-  multipleSplats(4);
+  // 진짜 초기화: 모든 잉크/유체 상태를 비움
+  if (typeof clearFluid === 'function') clearFluid();
 }
 function togglePause(){ config.PAUSED=!config.PAUSED; document.getElementById('pauseBtn').textContent=config.PAUSED?'▶':'⏸'; }
 window.addEventListener('keydown',e=>{
