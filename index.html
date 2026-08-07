@@ -134,11 +134,17 @@
       <span class="plabel">잉크</span>
     </div>
   </div>
+  <div class="row">
+    <div class="palette" id="trailPalette">
+      <span class="plabel">흔적</span>
+    </div>
+  </div>
   <div class="row" style="justify-content:space-between">
     <div class="actions">
       <button class="btn" onclick="splatBurst()" title="잉크 뿌리기">✦ 뿌리기</button>
       <button class="btn" onclick="resetInk()" title="리셋">↺ 리셋</button>
       <button class="btn" onclick="togglePause()" id="pauseBtn" title="일시정지">⏸</button>
+      <button class="btn" id="neonBtn" onclick="toggleNeon()" title="네온사인 필터">네온사인</button>
     </div>
     <div class="meta"><span id="resTag">--</span><span id="fps">-- fps</span></div>
   </div>
@@ -180,47 +186,57 @@ const PRESETS = [
   { name:'시안', hex:'#4AB8C9' },
 ];
 let activeColor = PRESETS[0].hex;   // 기본 올리브
+let activeTrailColor = PRESETS[3].hex;  // 기본 흔적: 테라코타 (섞기용 대비색)
 function hexToRgb(hex){
   const h = hex.replace('#','');
   return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
 }
-function buildPalette(){
-  const pal = document.getElementById('palette');
+function buildPalette(containerId, getColor, setColor){
+  const pal = document.getElementById(containerId);
+  if (!pal) return;
   pal.querySelectorAll('.swatch').forEach(s=>s.remove());
-  PRESETS.forEach((p,i)=>{
+  PRESETS.forEach((p)=>{
     const sw = document.createElement('div');
-    sw.className = 'swatch' + (p.hex===activeColor ? ' on' : '');
+    sw.className = 'swatch' + (p.hex===getColor() ? ' on' : '');
     sw.style.background = p.hex;
     sw.title = p.name;
     sw.addEventListener('click', ()=>{
-      activeColor = p.hex;
-      window.__fluidInkColor = p.hex;
-      document.querySelectorAll('#palette .swatch').forEach(s=>s.classList.remove('on'));
+      setColor(p.hex);
+      pal.querySelectorAll('.swatch').forEach(s=>s.classList.remove('on'));
       sw.classList.add('on');
     });
     pal.appendChild(sw);
   });
-  // 커스텀 컬러 피커
   const picker = document.createElement('div');
-  picker.className = 'swatch picker' + (PRESETS.every(p=>p.hex!==activeColor) ? ' on' : '');
+  picker.className = 'swatch picker' + (PRESETS.every(p=>p.hex!==getColor()) ? ' on' : '');
   picker.title = '커스텀 색';
   const input = document.createElement('input');
   input.type = 'color';
-  input.value = activeColor;
+  input.value = getColor();
   input.addEventListener('input', e=>{
-    activeColor = e.target.value;
-    window.__fluidInkColor = e.target.value;
-    document.querySelectorAll('#palette .swatch').forEach(s=>s.classList.remove('on'));
+    setColor(e.target.value);
+    pal.querySelectorAll('.swatch').forEach(s=>s.classList.remove('on'));
     picker.classList.add('on');
   });
   picker.appendChild(input);
   picker.innerHTML += '+';
   pal.appendChild(picker);
 }
-buildPalette();
+buildPalette('palette', ()=>activeColor, (hex)=>{ activeColor=hex; window.__fluidInkColor=hex; });
+buildPalette('trailPalette', ()=>activeTrailColor, (hex)=>{ activeTrailColor=hex; window.__fluidTrailColor=hex; });
+
+/* 네온사인 필터 토글 */
+function toggleNeon(){
+  window.__neonMode = !window.__neonMode;
+  const btn = document.getElementById('neonBtn');
+  if (btn) btn.classList.toggle('on', window.__neonMode);
+  // 셰이더 재컴파일 트리거
+  if (typeof updateKeywords === 'function') updateKeywords();
+}
 
 /* generateColor는 fluid.js 내부에서 window.__fluidInkColor를 직접 읽음 */
 window.__fluidInkColor = activeColor;
+window.__fluidTrailColor = activeTrailColor;
 
 /* ---- UI bindings ---- */
 const $spd=document.getElementById('spd'),$dist=document.getElementById('dist'),$grain=document.getElementById('size');

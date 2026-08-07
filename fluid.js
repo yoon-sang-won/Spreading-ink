@@ -33,18 +33,18 @@ let config = {
     SIM_RESOLUTION: 256,
     DYE_RESOLUTION: 768,
     CAPTURE_RESOLUTION: 512,
-    DENSITY_DISSIPATION: 0.28,
+    DENSITY_DISSIPATION: 0.45,
     VELOCITY_DISSIPATION: 0.22,
     PRESSURE: 0.8,
     PRESSURE_ITERATIONS: 12,
     CURL: 26,
-    SPLAT_RADIUS: 0.30,
-    SPLAT_FORCE: 3500,
+    SPLAT_RADIUS: 0.16,
+    SPLAT_FORCE: 1800,
     SHADING: true,
     COLORFUL: false,
     COLOR_UPDATE_SPEED: 10,
     PAUSED: false,
-    BACK_COLOR: { r: 8, g: 18, b: 11 },
+    BACK_COLOR: { r: 0, g: 0, b: 0 },
     TRANSPARENT: false,
     BLOOM: true,
     BLOOM_ITERATIONS: 8,
@@ -507,6 +507,10 @@ const displayShaderSource = `
         // (prevents white blowout on drag start while keeping ink color)
         float lum = dot(c, vec3(0.299, 0.587, 0.114));
         float k = 1.0 / (1.0 + max(0.0, lum - 0.45) * 1.8);
+        #ifdef NEON
+            // neon: allow saturated white glow (minimal compression)
+            k = 1.0;
+        #endif
         c *= k;
         float a = max(c.r, max(c.g, c.b));
         gl_FragColor = vec4(c, a);
@@ -1064,6 +1068,7 @@ function updateKeywords () {
     if (config.SHADING) displayKeywords.push("SHADING");
     if (config.BLOOM) displayKeywords.push("BLOOM");
     if (config.SUNRAYS) displayKeywords.push("SUNRAYS");
+    if (window.__neonMode) displayKeywords.push("NEON");
     displayMaterial.setKeywords(displayKeywords);
 }
 
@@ -1352,7 +1357,8 @@ function splat (x, y, dx, dy, color) {
 
     gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
     // mild dampening: keeps drag strokes vivid while preventing white blowout
-    gl.uniform3f(splatProgram.uniforms.color, color.r * 1.8, color.g * 1.8, color.b * 1.8);
+        const inkBoost = (window.__neonMode) ? 4.5 : 1.8;
+    gl.uniform3f(splatProgram.uniforms.color, color.r * inkBoost, color.g * inkBoost, color.b * inkBoost);
     blit(dye.write);
     dye.swap();
 }
@@ -1440,7 +1446,7 @@ function updatePointerDownData (pointer, id, posX, posY) {
     pointer.prevTexcoordY = pointer.texcoordY;
     pointer.deltaX = 0;
     pointer.deltaY = 0;
-    pointer.color = generateColor();
+    pointer.color = generateTrailColor();
 }
 
 function updatePointerMoveData (pointer, posX, posY) {
@@ -1477,6 +1483,19 @@ function generateColor () {
     let g = parseInt(inkHex.slice(2, 4), 16) || 179;
     let b = parseInt(inkHex.slice(4, 6), 16) || 110;
     // brightness variation for watercolor feel
+    const lit = 0.6 + Math.random() * 0.4;
+    const jitter = 1 + (Math.random() - 0.5) * 0.1;
+    return { r: r / 255 * lit * jitter, g: g / 255 * lit * jitter, b: b / 255 * lit * jitter };
+}
+
+
+function generateTrailColor () {
+    // trail color: 흔적용 (기본 주색과 다른 색으로 섞임)
+    let inkHex = (typeof window.__fluidTrailColor === 'string') ? window.__fluidTrailColor : '#C96F4A';
+    inkHex = inkHex.replace('#', '');
+    let r = parseInt(inkHex.slice(0, 2), 16) || 201;
+    let g = parseInt(inkHex.slice(2, 4), 16) || 111;
+    let b = parseInt(inkHex.slice(4, 6), 16) || 74;
     const lit = 0.6 + Math.random() * 0.4;
     const jitter = 1 + (Math.random() - 0.5) * 0.1;
     return { r: r / 255 * lit * jitter, g: g / 255 * lit * jitter, b: b / 255 * lit * jitter };
