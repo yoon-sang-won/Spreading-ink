@@ -9,5 +9,6 @@ node_modules/
 # Command Code
 .commandcode/
 
-# Local test artifacts
-_ct*/
+# Local capture artifacts (not part of the project)
+_frames/
+.playwright-mcp/
