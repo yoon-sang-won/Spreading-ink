@@ -39,7 +39,7 @@ let config = {
     PRESSURE_ITERATIONS: 12,
     CURL: 26,
     SPLAT_RADIUS: 0.30,
-    SPLAT_FORCE: 6500,
+    SPLAT_FORCE: 4200,
     SHADING: true,
     COLORFUL: false,
     COLOR_UPDATE_SPEED: 10,
@@ -1352,7 +1352,7 @@ function splat (x, y, dx, dy, color) {
 
     gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
     // mild dampening: keeps drag strokes vivid while preventing white blowout
-    gl.uniform3f(splatProgram.uniforms.color, color.r * 4.0, color.g * 4.0, color.b * 4.0);
+    gl.uniform3f(splatProgram.uniforms.color, color.r * 2.5, color.g * 2.5, color.b * 2.5);
     blit(dye.write);
     dye.swap();
 }
@@ -1371,6 +1371,8 @@ canvas.addEventListener('mousedown', e => {
     if (pointer == null)
         pointer = new pointerPrototype();
     updatePointerDownData(pointer, -1, posX, posY);
+    // immediate ink drop on tap/click (drag continues via mousemove)
+    splat(pointer.texcoordX, pointer.texcoordY, 0, 0, generateColor());
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -1392,11 +1394,11 @@ canvas.addEventListener('touchstart', e => {
         pointers.push(new pointerPrototype());
     const rect = canvas.getBoundingClientRect();
     for (let i = 0; i < touches.length; i++) {
-        let posX = scaleByPixelRatio(touches[i].pageX - rect.left);
-        let posY = scaleByPixelRatio(touches[i].pageY - rect.top);
+        let posX = scaleByPixelRatio(touches[i].clientX - rect.left);
+        let posY = scaleByPixelRatio(touches[i].clientY - rect.top);
         updatePointerDownData(pointers[i + 1], touches[i].identifier, posX, posY);
         // immediate ink drop on touch for snappier mobile feel
-        splat((touches[i].pageX - rect.left) / rect.width, 1.0 - (touches[i].pageY - rect.top) / rect.height, 0, 0, generateColor());
+        splat((touches[i].clientX - rect.left) / rect.width, 1.0 - (touches[i].clientY - rect.top) / rect.height, 0, 0, generateColor());
     }
 });
 
@@ -1407,13 +1409,23 @@ canvas.addEventListener('touchmove', e => {
     for (let i = 0; i < touches.length; i++) {
         let pointer = pointers[i + 1];
         if (!pointer.down) continue;
-        let posX = scaleByPixelRatio(touches[i].pageX - rect.left);
-        let posY = scaleByPixelRatio(touches[i].pageY - rect.top);
+        let posX = scaleByPixelRatio(touches[i].clientX - rect.left);
+        let posY = scaleByPixelRatio(touches[i].clientY - rect.top);
         updatePointerMoveData(pointer, posX, posY);
     }
-}, false);
+}, { passive: false });
 
 window.addEventListener('touchend', e => {
+    const touches = e.changedTouches;
+    for (let i = 0; i < touches.length; i++)
+    {
+        let pointer = pointers.find(p => p.id == touches[i].identifier);
+        if (pointer == null) continue;
+        updatePointerUpData(pointer);
+    }
+});
+
+window.addEventListener('touchcancel', e => {
     const touches = e.changedTouches;
     for (let i = 0; i < touches.length; i++)
     {
@@ -1560,6 +1572,8 @@ function clearFluid () {
 
 window.clearFluid = clearFluid;
 
+
+
 function scaleByPixelRatio (input) {
     let pixelRatio = window.devicePixelRatio || 1;
     return Math.floor(input * pixelRatio);
@@ -1573,4 +1587,71 @@ function hashCode (s) {
         hash |= 0; // Convert to 32bit integer
     }
     return hash;
+};
+
+/* ============================================================
+   SENSOR INPUT BRIDGE — velocity-only APIs
+   센서 입력은 dye(잉크)를 만들지 않고 velocity에만 힘을 준다.
+   ============================================================ */
+
+// global uniform force shader: velocity texture 전체에 일정한 힘을 더한다
+const velocityForceShader = compileShader(gl.FRAGMENT_SHADER, `
+    precision mediump float;
+    precision mediump sampler2D;
+    varying highp vec2 vUv;
+    uniform sampler2D uVelocity;
+    uniform vec2 force;
+    void main () {
+        vec2 v = texture2D(uVelocity, vUv).xy;
+        gl_FragColor = vec4(v + force, 0.0, 1.0);
+    }
+`);
+const velocityForceProgram = new Program(baseVertexShader, velocityForceShader);
+
+// velocity framebuffer에만 splat impulse를 주입 (dye 수정 없음)
+function addVelocityImpulse (x, y, dx, dy, radiusScale) {
+    if (config.PAUSED) return;
+    const sizeScale = (typeof window.__fluidSizeScale === 'number') ? window.__fluidSizeScale : 1.0;
+    const baseRadius = config.SPLAT_RADIUS / 100.0 * sizeScale;
+    const radius = correctRadius(baseRadius * (radiusScale != null ? radiusScale : 1.0));
+    splatProgram.bind();
+    gl.uniform1i(splatProgram.uniforms.uTarget, velocity.read.attach(0));
+    gl.uniform1f(splatProgram.uniforms.aspectRatio, canvas.width / canvas.height);
+    gl.uniform2f(splatProgram.uniforms.point, x, y);
+    gl.uniform3f(splatProgram.uniforms.color, dx, dy, 0.0);
+    gl.uniform1f(splatProgram.uniforms.radius, radius);
+    blit(velocity.write);
+    velocity.swap();
+}
+
+// 화면 전체 velocity에 지속적인 힘 적용 (Tilt용) — 한 번의 pass
+function applyUniformVelocityForce (dx, dy) {
+    if (config.PAUSED) return;
+    velocityForceProgram.bind();
+    gl.uniform1i(velocityForceProgram.uniforms.uVelocity, velocity.read.attach(0));
+    gl.uniform2f(velocityForceProgram.uniforms.force, dx, dy);
+    blit(velocity.write);
+    velocity.swap();
+}
+
+// Blow용 gust: 화면 하단에서 위로 넓은 velocity impulse 여러 개
+function applyGust (strength) {
+    if (config.PAUSED || strength <= 0.01) return;
+    const sx = 0.15, ex = 0.85, n = 4;
+    for (let i = 0; i < n; i++) {
+        const t = n === 1 ? 0.5 : i / (n - 1);
+        const x = sx + (ex - sx) * t + (Math.random() - 0.5) * 0.06;
+        const y = 0.92 - Math.random() * 0.06;
+        const force = 900 * strength * (0.8 + Math.random() * 0.5);
+        addVelocityImpulse(x, y, 0, -force, 1.6);
+    }
+}
+
+// 모바일 input 모듈용 공개 API
+window.FluidBridge = {
+    addVelocityImpulse,
+    applyUniformVelocityForce,
+    applyGust,
+    isPaused: function () { return config.PAUSED; },
+    getConfig: function () { return config; }
 };
