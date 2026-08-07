@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>자연스러운 불안정함 — Fluid</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  button{font:inherit;color:inherit;background:none;border:none;-webkit-tap-highlight-color:transparent}
+  :root{
+    --ink:#EFEFEF;
+    --muted:#9A9AA3;
+    --track:rgba(255,255,255,.2);
+  }
+  html,body{height:100%;background:#0E0E12;color:var(--ink);overflow:hidden}
+  body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E")}
+
+  /* FULLSCREEN canvas stage */
+  .stage{position:fixed;inset:0;z-index:1}
+  .stage canvas{width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+
+  /* hint pill - top center */
+  .hint{
+    position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:10;
+    background:rgba(8,10,8,.55);backdrop-filter:blur(10px);color:#E8F0E4;
+    border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:7px 14px;
+    font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;pointer-events:none;transition:opacity .4s;
+    white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis;
+  }
+
+  /* top-right 3-dot menu */
+  .menu-dots{
+    position:fixed;top:14px;right:16px;z-index:10;
+    display:flex;gap:5px;cursor:pointer;padding:8px;
+    background:rgba(8,10,8,.4);border-radius:999px;backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.1);
+  }
+  .menu-dots span{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.65)}
+
+  /* ---- BOTTOM CONTROL OVERLAY (semi-transparent) ---- */
+  .controls{
+    position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    z-index:10;width:min(720px,calc(100vw - 20px));
+    background:rgba(16,18,20,.55);backdrop-filter:blur(18px) saturate(1.2);
+    border:1px solid rgba(255,255,255,.12);border-radius:20px;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+    padding:14px 18px 16px;
+    display:flex;flex-direction:column;gap:10px;
+    -webkit-user-select:none;user-select:none;
+  }
+  .controls .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .ctl{display:flex;align-items:center;gap:10px;flex:1;min-width:170px}
+  .ctl label{font-size:12px;color:#E2E2E6;font-weight:500;white-space:nowrap}
+  .ctl .val{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);width:26px;text-align:right}
+  input[type=range]{appearance:none;-webkit-appearance:none;width:120px;height:4px;border-radius:999px;background:var(--track);outline:none;cursor:pointer;touch-action:none}
+  input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+  .btn{
+    border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:7px 13px;
+    background:rgba(255,255,255,.08);color:var(--ink);cursor:pointer;
+    font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;transition:.15s;white-space:nowrap;
+  }
+  .btn:hover{background:rgba(255,255,255,.16)}
+  .btn.on{background:#fff;color:#141419;border-color:#fff}
+  /* 접근성: 키보드 포커스 시에만 outline (기본 제거하지 않음) */
+  :focus-visible{outline:2px solid rgba(255,255,255,.7);outline-offset:2px;border-radius:6px}
+  .swatch:focus-visible,.icon-btn:focus-visible,.menu-dots:focus-visible{outline-offset:3px}
+  .actions{display:flex;gap:8px;align-items:center}
+  .icon-btn{
+    width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;cursor:pointer;font-size:16px;transition:background .15s;
+    position:relative;
+  }
+  .icon-btn::after{content:'';position:absolute;inset:-7px;border-radius:50%}
+  .icon-btn:hover{background:rgba(255,255,255,.2)}
+  .meta{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    color:var(--muted);font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+  }
+  .about-link{
+    font:inherit;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:6px;
+    letter-spacing:.05em;transition:color .15s;
+  }
+  .about-link:hover{color:#fff}
+
+  /* 모바일 전용 요소는 데스크톱에서 숨김 */
+  .mini-bar,.drawer,.drawer-backdrop{display:none}
+
+  /* 데스크톱: 작품 감상에 집중하도록 컨트롤은 기본 숨김,
+     ··· 버튼으로 표시/숨김 토글 */
+  .controls{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(12px);transition:opacity .25s ease,transform .25s ease}
+  .controls.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+
+  /* ---- ABOUT PANEL (데스크톱) ---- */
+  .about{
+    position:fixed;right:16px;top:58px;z-index:12;
+    width:min(320px,calc(100vw - 32px));
+    background:rgba(16,18,20,.82);backdrop-filter:blur(18px) saturate(1.2);
+    border:1px solid rgba(255,255,255,.12);border-radius:16px;
+    padding:18px 20px;box-shadow:0 12px 40px rgba(0,0,0,.5);
+    display:none;flex-direction:column;gap:10px;
+    color:#E2E2E6;font-size:12px;line-height:1.6;
+  }
+  .about.open{display:flex}
+  .about h2{font-size:15px;font-weight:600;color:#fff;letter-spacing:.02em}
+  .about .sub{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.04em}
+  .about p{color:#C4C4CC}
+  .about a{color:#B9D9AE;text-decoration:none;border-bottom:1px solid rgba(185,217,174,.3)}
+  .about a:hover{color:#fff}
+
+  /* ---- COLOR PALETTE ---- */
+  .palette{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .palette .plabel{font-size:11px;color:#E2E2E6;font-weight:500;white-space:nowrap;margin-right:2px}
+  .swatch{
+    width:24px;height:24px;border-radius:50%;cursor:pointer;position:relative;
+    border:2px solid rgba(255,255,255,.25);transition:transform .12s,border-color .12s;
+    flex-shrink:0;padding:0;appearance:none;
+    -webkit-appearance:none;
+  }
+  /* 터치 타깃 확장: 시각 크기는 유지하고 히트 영역만 40px+로 */
+  .swatch::after{content:'';position:absolute;inset:-8px;border-radius:50%}
+  .swatch.picker::after{inset:-8px}
+  .swatch:hover{transform:scale(1.15)}
+  .swatch.on{border-color:#fff;transform:scale(1.15);box-shadow:0 0 0 3px rgba(255,255,255,.15)}
+  .swatch.picker{
+    border-style:dashed;border-color:rgba(255,255,255,.4);
+    display:grid;place-items:center;font-size:14px;color:#fff;background:rgba(255,255,255,.08);
+  }
+  .swatch input[type=color]{
+    position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;
+  }
+
+  /* ---- MOBILE ---- */
+  @media (max-width: 700px){
+    .hint{top:10px;font-size:10px;padding:6px 12px}
+    .kbd-hint{display:none}
+    .menu-dots{top:10px;right:10px;padding:12px;gap:6px}
+    .menu-dots span{width:5px;height:5px}
+    .controls{bottom:calc(10px + env(safe-area-inset-bottom));width:calc(100vw - 12px);border-radius:18px;padding:12px 14px 14px;gap:8px}
+    .controls .row{gap:8px}
+    .ctl{min-width:0;gap:8px}
+    .ctl label{font-size:12px}
+    .ctl .val{width:22px;font-size:11px}
+    input[type=range]{width:100%;min-width:0;height:5px}
+    input[type=range]::-webkit-slider-thumb{width:20px;height:20px}
+    .icon-btn{width:40px;height:40px;font-size:18px}
+    .btn{padding:7px 12px;font-size:10px}
+    .swatch{width:28px;height:28px}
+    /* 모바일: 필터 행들은 숨기고 햄버거 메뉴 안으로 */
+    .controls .filter-row{display:none}
+    /* 미니 바: 모바일에서 필터 버튼만 */
+    .mini-bar{
+      position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);
+      z-index:10;display:flex !important;gap:8px;align-items:center;
+      background:rgba(16,18,20,.55);backdrop-filter:blur(18px) saturate(1.2);
+      border:1px solid rgba(255,255,255,.12);border-radius:999px;
+      padding:8px 10px;box-shadow:0 12px 40px rgba(0,0,0,.5);
+    }
+    .mini-bar .btn{padding:10px 14px;font-size:13px;min-height:42px}
+    .controls{display:none}
+    /* 필터 드로어 (햄버거로 열림) */
+    .drawer{
+      position:fixed;left:50%;bottom:0;transform:translateX(-50%) translateY(105%);
+      z-index:20;width:100%;max-width:520px;
+      display:block;
+      background:rgba(16,18,20,.88);backdrop-filter:blur(22px) saturate(1.2);
+      border-top:1px solid rgba(255,255,255,.12);border-radius:20px 20px 0 0;
+      padding:16px 18px calc(16px + env(safe-area-inset-bottom));
+      max-height:min(75vh, 640px);overflow-y:auto;-webkit-overflow-scrolling:touch;
+      box-shadow:0 -12px 40px rgba(0,0,0,.6);
+      transition:transform .3s cubic-bezier(.2,.8,.3,1);
+    }
+    .drawer.open{transform:translateX(-50%) translateY(0)}
+    .drawer .grabber{
+      width:36px;height:4px;border-radius:999px;background:rgba(255,255,255,.25);
+      margin:0 auto 12px;
+    }
+    .drawer .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+    .drawer .ctl{display:flex;align-items:center;gap:10px;flex:1;min-width:140px}
+    .drawer .ctl label{font-size:12px;color:#E2E2E6;font-weight:500;white-space:nowrap}
+    .drawer .ctl .val{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);width:24px;text-align:right}
+    .drawer input[type=range]{width:100%;min-width:0;height:5px}
+    .drawer .palette{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .drawer .plabel{font-size:11px;color:#E2E2E6;font-weight:500;white-space:nowrap;margin-right:2px}
+    .drawer .swatch{width:36px;height:36px}
+    .drawer .swatch.picker{font-size:16px}
+    .drawer .ctl label{font-size:13px}
+    .drawer .ctl .val{width:26px;font-size:13px}
+    .drawer input[type=range]::-webkit-slider-thumb{width:24px;height:24px}
+    .drawer input[type=range]{height:6px}
+    .drawer .actions{display:flex;gap:10px;flex-wrap:wrap}
+    .drawer .btn{padding:14px 20px;font-size:14px;min-height:48px;flex:1;display:flex;align-items:center;justify-content:center}
+    /* 모바일: About은 드로어 안에서 열리는 패널로 */
+    .about{
+      position:static;width:100%;margin-top:4px;
+      background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+      border-radius:14px;padding:14px 16px;
+    }
+    .drawer-backdrop{
+      position:fixed;inset:0;z-index:15;background:rgba(0,0,0,.4);
+      display:block;
+      opacity:0;pointer-events:none;transition:opacity .3s;
+    }
+    .drawer-backdrop.open{opacity:1;pointer-events:auto}
+  }
+  @media (max-width: 380px){
+    .controls .row{flex-direction:column;align-items:stretch}
+    .ctl{width:100%}
+    .actions{justify-content:space-between}
+    .drawer .row{flex-direction:column;align-items:stretch}
+    .drawer .ctl{width:100%}
+  }
+</style>
+</head>
+<body>
+
+<div class="stage" id="vp">
+  <canvas id="c"></canvas>
+</div>
+
+<div class="hint" id="hint">드래그하면 잉크가 흘러요 · 탭하면 잉크 방울 · <span class="kbd-hint">P 일시정지 · Space 뿌리기</span></div>
+<button class="menu-dots" id="menuBtn" title="설정" aria-label="설정 메뉴"><span></span><span></span><span></span></button>
+
+<div class="controls" id="controls">
+  <div class="row">
+    <div class="ctl"><label for="spd">흐름</label><input type="range" id="spd" min="0" max="100" value="69"><span class="val" id="spdV">69</span></div>
+    <div class="ctl"><label for="dist">왜곡</label><input type="range" id="dist" min="0" max="100" value="40"><span class="val" id="distV">40</span></div>
+    <div class="ctl"><label for="size">굵기</label><input type="range" id="size" min="0" max="100" value="30"><span class="val" id="sizeV">30</span></div>
+  </div>
+  <div class="row">
+    <div class="palette" id="palette">
+      <span class="plabel">잉크</span>
+    </div>
+  </div>
+  <div class="row">
+    <div class="palette" id="trailPalette">
+      <span class="plabel">흔적</span>
+    </div>
+  </div>
+  <div class="row" style="justify-content:space-between">
+    <div class="actions">
+      <button class="btn" onclick="splatBurst()" title="잉크 뿌리기">✦ 뿌리기</button>
+      <button class="btn" onclick="resetInk()" title="리셋">↺ 리셋</button>
+      <button class="btn" onclick="togglePause()" id="pauseBtn" title="일시정지">⏸</button>
+      <button class="btn" id="neonBtn" onclick="toggleNeon()" title="네온사인 필터">네온사인</button>
+    </div>
+    <div class="meta">
+      <button class="about-link" id="aboutLink" onclick="toggleAbout()" title="작품 정보">About ↗</button>
+      <span id="resTag" hidden>--</span><span id="fps" hidden>-- fps</span>
+    </div>
+  </div>
+</div>
+
+<!-- 모바일 미니 바 -->
+<div class="mini-bar" id="miniBar">
+  <button class="btn" onclick="splatBurst()" title="잉크 뿌리기">✦</button>
+  <button class="btn" onclick="resetInk()" title="리셋">↺</button>
+  <button class="btn" onclick="togglePause()" id="pauseBtnM" title="일시정지">⏸</button>
+</div>
+
+<!-- 모바일 필터 드로어 -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="grabber"></div>
+  <div class="row">
+    <div class="ctl"><label for="spdM">흐름</label><input type="range" id="spdM" min="0" max="100" value="69"><span class="val" id="spdMV">69</span></div>
+    <div class="ctl"><label for="distM">왜곡</label><input type="range" id="distM" min="0" max="100" value="40"><span class="val" id="distMV">40</span></div>
+    <div class="ctl"><label for="sizeM">굵기</label><input type="range" id="sizeM" min="0" max="100" value="30"><span class="val" id="sizeMV">30</span></div>
+  </div>
+  <div class="row">
+    <div class="palette" id="paletteM">
+      <span class="plabel">잉크</span>
+    </div>
+  </div>
+  <div class="row">
+    <div class="palette" id="trailPaletteM">
+      <span class="plabel">흔적</span>
+    </div>
+  </div>
+  <div class="row">
+    <div class="actions">
+      <button class="btn" id="neonBtnM" onclick="toggleNeon()" title="네온사인 필터">네온사인</button>
+      <button class="btn" onclick="toggleAbout()" title="작품 정보">About</button>
+    </div>
+  </div>
+  <!-- About 패널 (모바일: drawer 내부 expandable section / 데스크톱: 우측 플로팅) -->
+  <div class="about" id="aboutPanel" role="dialog" aria-label="작품 정보">
+    <h2>Natural Instability</h2>
+    <div class="sub">자연스러운 불안정함 — Interactive WebGL Fluid Study</div>
+    <p>Fluid simulation based on <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">Pavel Dobryakov's MIT-licensed WebGL fluid implementation</a>.</p>
+    <p>Interaction design, dual-color ink/trail system, responsive UI, visual customization and additional interaction implementation by the project author.</p>
+    <p><a href="https://github.com/yoon-sang-won/Spreading-ink" target="_blank" rel="noopener">GitHub ↗</a></p>
+  </div>
+</div>
+
+<script>
+/* ---- resolution-adaptive dye (fluid.js 로드 전에 설정) ----
+   화면이 클수록 dye를 낮춰 렌더링 부하 제한.
+   시뮬레이션 해상도 SIM은 유지되어 유체 물리 품질은 보존. */
+function edgeSize(){
+  return Math.max(window.innerWidth, window.innerHeight);
+}
+function pickDyeRes(){
+  const e = Math.max(window.innerWidth, window.innerHeight);
+  let res = 896;
+  if (e >= 2200) res = 768;        // 4K급 화면
+  else if (e >= 1500) res = 768;   // 2K급 (2560px): 화질 유지
+  else if (e <= 700) res = 576;    // 모바일
+  return res;
+}
+window.__dyeRes = pickDyeRes();
+window.addEventListener('resize', ()=>{ window.__dyeRes = pickDyeRes(); });
+</script>
+<script src="fluid.js"></script>
+<script>
+/* ---- resolution-aware ink size ----
+   기준: 데스크톱(>=1280px)에서는 기본 굵기 100%
+   모바일/작은 화면에서는 손가락 터치에 맞게 굵기를 자동 축소 (55%) */
+const MIN_EDGE = 360;   // 이보다 작은 화면은 굵기 55%
+const MAX_EDGE = 1280;  // 이보다 큰 화면은 굵기 100%
+function edgeSize(){
+  return Math.max(window.innerWidth, window.innerHeight);
+}
+function sizeScale(){
+  const e = edgeSize();
+  const t = Math.min(1, Math.max(0, (e - MIN_EDGE) / (MAX_EDGE - MIN_EDGE)));
+  return 0.55 + 0.45 * t;   // 0.55 ~ 1.0
+}
+let userSize = 30;   // 슬라이더 0~100
+function applySizeScale(){
+  const s = sizeScale() * (0.55 + userSize / 100);
+  window.__fluidSizeScale = s;
+}
+applySizeScale();
+window.addEventListener('resize', applySizeScale);
+
+/* ---- ink color palette ----
+   사용자가 색을 고르면 generateColor()가 그 색 계열로 잉크 생성 */
+const PRESETS = [
+  { name:'올리브', hex:'#7FB36E' },
+  { name:'세이지', hex:'#A8C69A' },
+  { name:'머스타드', hex:'#C9A227' },
+  { name:'테라코타', hex:'#C96F4A' },
+  { name:'인디고', hex:'#5E7BC9' },
+  { name:'플럼', hex:'#9A5EC9' },
+  { name:'로즈', hex:'#D96A8C' },
+  { name:'시안', hex:'#4AB8C9' },
+];
+let activeColor = PRESETS[0].hex;   // 기본 올리브
+let activeTrailColor = PRESETS[3].hex;  // 기본 흔적: 테라코타 (섞기용 대비색)
+function hexToRgb(hex){
+  const h = hex.replace('#','');
+  return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
+}
+function buildPalette(containerId, getColor, setColor){
+  const pal = document.getElementById(containerId);
+  if (!pal) return;
+  pal.querySelectorAll('.swatch').forEach(s=>s.remove());
+  PRESETS.forEach((p)=>{
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = 'swatch' + (p.hex===getColor() ? ' on' : '');
+    sw.style.background = p.hex;
+    sw.title = p.name;
+    sw.setAttribute('aria-label', p.name + ' 색 선택');
+    sw.setAttribute('aria-pressed', p.hex===getColor() ? 'true' : 'false');
+    sw.addEventListener('click', ()=>{
+      setColor(p.hex);
+      pal.querySelectorAll('.swatch').forEach(s=>s.classList.remove('on'));
+      sw.classList.add('on');
+      pal.querySelectorAll('.swatch').forEach(s=>s.setAttribute('aria-pressed','false'));
+      sw.setAttribute('aria-pressed','true');
+    });
+    pal.appendChild(sw);
+  });
+  const picker = document.createElement('button');
+  picker.type = 'button';
+  picker.className = 'swatch picker' + (PRESETS.every(p=>p.hex!==getColor()) ? ' on' : '');
+  picker.title = '커스텀 색';
+  picker.setAttribute('aria-label', '커스텀 색 선택');
+  picker.setAttribute('aria-pressed', PRESETS.every(p=>p.hex!==getColor()) ? 'true' : 'false');
+  // innerHTML 재할당은 기존 child DOM과 리스너를 파괴하므로 사용하지 않음.
+  // 버튼 안에 <input>을 중첩하지 않고, 버튼 클릭 시 숨겨진 color input을 여는 방식(Option B).
+  const plus = document.createElement('span');
+  plus.textContent = '+';
+  picker.appendChild(plus);
+  pal.appendChild(picker);
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.value = getColor();
+  input.setAttribute('aria-label', '커스텀 색 고르기');
+  input.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
+  input.addEventListener('input', e=>{
+    setColor(e.target.value);
+    pal.querySelectorAll('.swatch').forEach(s=>s.classList.remove('on'));
+    picker.classList.add('on');
+    pal.querySelectorAll('.swatch').forEach(s=>s.setAttribute('aria-pressed','false'));
+    picker.setAttribute('aria-pressed','true');
+  });
+  picker.addEventListener('click', ()=>{
+    input.value = getColor();  // 현재 선택 색으로 초기화 후 열기
+    input.click();
+  });
+  document.body.appendChild(input);
+}
+buildPalette('palette', ()=>activeColor, (hex)=>{ activeColor=hex; window.__fluidInkColor=hex; });
+buildPalette('trailPalette', ()=>activeTrailColor, (hex)=>{ activeTrailColor=hex; window.__fluidTrailColor=hex; });
+buildPalette('paletteM', ()=>activeColor, (hex)=>{ activeColor=hex; window.__fluidInkColor=hex; });
+buildPalette('trailPaletteM', ()=>activeTrailColor, (hex)=>{ activeTrailColor=hex; window.__fluidTrailColor=hex; });
+
+/* 네온 버튼 동기화 (데스크톱/모바일) */
+function toggleNeon(){
+  window.__neonMode = !window.__neonMode;
+  const btn = document.getElementById('neonBtn');
+  if (btn) btn.classList.toggle('on', window.__neonMode);
+  const btnM = document.getElementById('neonBtnM');
+  if (btnM) btnM.classList.toggle('on', window.__neonMode);
+  // 셰이더 재컴파일 트리거
+  if (typeof updateKeywords === 'function') updateKeywords();
+}
+
+/* generateColor는 fluid.js 내부에서 window.__fluidInkColor를 직접 읽음 */
+window.__fluidInkColor = activeColor;
+window.__fluidTrailColor = activeTrailColor;
+
+/* ---- UI bindings ---- */
+const $spd=document.getElementById('spd'),$dist=document.getElementById('dist'),$grain=document.getElementById('size');
+const $spdV=document.getElementById('spdV'),$distV=document.getElementById('distV'),$grainV=document.getElementById('sizeV');
+const $resTag=document.getElementById('resTag');
+$spd.addEventListener('input',e=>{
+  const v=e.target.value/100;
+  config.VELOCITY_DISSIPATION=0.18+(1-v)*0.22;
+  config.DENSITY_DISSIPATION=0.16+v*0.25;
+  $spdV.textContent=e.target.value;
+});
+$dist.addEventListener('input',e=>{
+  const v=e.target.value/100;
+  config.CURL=6+v*44;
+  $distV.textContent=e.target.value;
+});
+$grain.addEventListener('input',e=>{
+  userSize=e.target.value;
+  $grainV.textContent=e.target.value;
+  applySizeScale();
+});
+/* prefers-reduced-motion이면 fluid.js가 낮춘 값을 유지 */
+if (!window.__reducedMotion) {
+  config.VELOCITY_DISSIPATION=0.18+(1-0.69)*0.22;
+  config.DENSITY_DISSIPATION=0.22;
+  config.CURL=6+0.40*44;
+}
+
+function splatBurst(){ multipleSplats(parseInt(Math.random()*12)+5); }
+function resetInk(){
+  // 진짜 초기화: 모든 잉크/유체 상태를 비움
+  if (typeof clearFluid === 'function') clearFluid();
+}
+function togglePause(){ config.PAUSED=!config.PAUSED; document.getElementById('pauseBtn').textContent=config.PAUSED?'▶':'⏸'; const m=document.getElementById('pauseBtnM'); if(m) m.textContent=config.PAUSED?'▶':'⏸'; }
+
+/* ---- 키보드 단축키 (fluid.js와 중복 없이 단일 등록) ----
+   P: 일시정지 토글 / Space: 잉크 뿌리기
+   입력 중(버튼/슬라이더 포커스)에는 단축키 비활성화해 충돌 방지 */
+window.addEventListener('keydown',e=>{
+  // 1) global dismiss: ESC는 focus 상태와 무관하게 항상 동작
+  if(e.key==='Escape'){
+    closeDrawer();
+    const a=document.getElementById('aboutPanel');
+    if(a) a.classList.remove('open');
+    return;
+  }
+  // 2) interactive element에 focus가 있으면 일반 shortcut 비활성화
+  const tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(tag==='INPUT'||tag==='BUTTON'||tag==='TEXTAREA'||tag==='SELECT') return;
+  // 3) 일반 shortcut
+  if(e.code==='Space'){e.preventDefault();splatBurst();}
+  if(e.code==='KeyP'){togglePause();}
+});
+
+/* ---- 모바일 드로어 (햄버거 메뉴) ---- */
+function openDrawer(){
+  const d=document.getElementById('drawer'), b=document.getElementById('drawerBackdrop');
+  if(d) d.classList.add('open');
+  if(b) b.classList.add('open');
+  // 모바일: About 패널이 drawer 밖(body)에 있으면 drawer 안으로 복귀
+  const a=document.getElementById('aboutPanel');
+  if (a && a.parentElement !== d && d) d.appendChild(a);
+}
+function closeDrawer(){
+  const d=document.getElementById('drawer'), b=document.getElementById('drawerBackdrop');
+  if(d) d.classList.remove('open');
+  if(b) b.classList.remove('open');
+}
+const $menuBtn=document.getElementById('menuBtn');
+if ($menuBtn) $menuBtn.addEventListener('click', ()=>{
+  // 모바일: 드로어 열기/닫기
+  if (window.innerWidth <= 700) {
+    if(document.getElementById('drawer').classList.contains('open')) closeDrawer();
+    else openDrawer();
+    return;
+  }
+  // 데스크톱: 컨트롤 표시/숨김 토글 (+About 함께 닫기)
+  const c = document.getElementById('controls');
+  const a = document.getElementById('aboutPanel');
+  const showing = c.classList.contains('show');
+  c.classList.toggle('show', !showing);
+  if (a) a.classList.remove('open');
+});
+
+/* ---- About 패널 토글 (데스크톱/모바일 공용) ---- */
+function toggleAbout(){
+  const a = document.getElementById('aboutPanel');
+  if (!a) return;
+  a.classList.toggle('open');
+  // 데스크톱: About 열면 컨트롤도 함께 표시 (일관된 UI 노출)
+  if (window.innerWidth > 700) {
+    // 데스크톱에서는 drawer(display:none) 밖으로 옮겨 플로팅 패널로 표시
+    if (a.classList.contains('open') && a.parentElement.id === 'drawer')
+      document.body.appendChild(a);
+    const c = document.getElementById('controls');
+    if (c) c.classList.add('show');
+  } else {
+    // 모바일: drawer 내부 section으로 복귀
+    const drawer = document.getElementById('drawer');
+    if (!a.classList.contains('open') && drawer && a.parentElement !== drawer)
+      drawer.appendChild(a);
+  }
+}
+
+/* 모바일 슬라이더 <-> 데스크톱 슬라이더 동기화 */
+function bindSlider(pcId, mobId, pcValId, mobValId, fn){
+  const pc=document.getElementById(pcId), mob=document.getElementById(mobId);
+  const pcV=document.getElementById(pcValId), mobV=document.getElementById(mobValId);
+  if(!pc || !mob) return;
+  pc.addEventListener('input', e=>{ mob.value=e.target.value; if(pcV) pcV.textContent=e.target.value; if(mobV) mobV.textContent=e.target.value; fn(e.target.value); });
+  mob.addEventListener('input', e=>{ pc.value=e.target.value; if(pcV) pcV.textContent=e.target.value; if(mobV) mobV.textContent=e.target.value; fn(e.target.value); });
+}
+bindSlider('spd','spdM','spdV','spdMV', v=>{
+  const x=v/100;
+  config.VELOCITY_DISSIPATION=0.18+(1-x)*0.22;
+  config.DENSITY_DISSIPATION=0.16+x*0.25;
+});
+bindSlider('dist','distM','distV','distMV', v=>{
+  config.CURL=6+(v/100)*44;
+});
+bindSlider('size','sizeM','sizeV','sizeMV', v=>{
+  userSize=v;
+  applySizeScale();
+});
+
+/* res tag + debug FPS (실제 WebGL render 기준)
+   별도 RAF 루프는 실제 render와 무관하므로 사용하지 않음.
+   fluid.js의 render() 실행 횟수를 delta로 계산 (pause 시 0으로 표시) */
+let lastFps=performance.now(), lastRenderCount=0;
+const fpsEl = document.getElementById('fps');
+const isDebug = new URLSearchParams(location.search).has('debug');
+const resTagEl = document.getElementById('resTag');
+if (isDebug) {
+  if (fpsEl) fpsEl.hidden = false;
+  if (resTagEl) resTagEl.hidden = false;
+}
+setInterval(()=>{
+  const now=performance.now();
+  const count = (typeof window.__renderFrameCount==='function') ? window.__renderFrameCount() : 0;
+  const fps = Math.round((count-lastRenderCount)*1000/(now-lastFps));
+  if (fpsEl) fpsEl.textContent = fps+' fps';
+  lastFps=now; lastRenderCount=count;
+},1000);
+function updateResTag(){
+  $resTag.textContent = Math.round(edgeSize())+'px · 굵기 '+Math.round(sizeScale()*100)+'%';
+}
+updateResTag();
+window.addEventListener('resize', updateResTag);
+
+</script>
+</body>
+</html>
