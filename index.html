@@ -79,6 +79,11 @@
     display:flex;align-items:center;justify-content:space-between;gap:10px;
     color:var(--muted);font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
   }
+  .about-link{
+    font:inherit;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:6px;
+    letter-spacing:.05em;transition:color .15s;
+  }
+  .about-link:hover{color:#fff}
 
   /* 모바일 전용 요소는 데스크톱에서 숨김 */
   .mini-bar,.drawer,.drawer-backdrop{display:none}
@@ -249,7 +254,10 @@
       <button class="btn" onclick="togglePause()" id="pauseBtn" title="일시정지">⏸</button>
       <button class="btn" id="neonBtn" onclick="toggleNeon()" title="네온사인 필터">네온사인</button>
     </div>
-    <div class="meta"><span id="resTag">--</span><span id="fps">-- fps</span></div>
+    <div class="meta">
+      <button class="about-link" id="aboutLink" onclick="toggleAbout()" title="작품 정보">About ↗</button>
+      <span id="resTag" hidden>--</span><span id="fps" hidden>-- fps</span>
+    </div>
   </div>
 </div>
 
@@ -373,10 +381,17 @@ function buildPalette(containerId, getColor, setColor){
   picker.title = '커스텀 색';
   picker.setAttribute('aria-label', '커스텀 색 선택');
   picker.setAttribute('aria-pressed', PRESETS.every(p=>p.hex!==getColor()) ? 'true' : 'false');
+  // innerHTML 재할당은 기존 child DOM과 리스너를 파괴하므로 사용하지 않음.
+  // 버튼 안에 <input>을 중첩하지 않고, 버튼 클릭 시 숨겨진 color input을 여는 방식(Option B).
+  const plus = document.createElement('span');
+  plus.textContent = '+';
+  picker.appendChild(plus);
+  pal.appendChild(picker);
   const input = document.createElement('input');
   input.type = 'color';
   input.value = getColor();
   input.setAttribute('aria-label', '커스텀 색 고르기');
+  input.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
   input.addEventListener('input', e=>{
     setColor(e.target.value);
     pal.querySelectorAll('.swatch').forEach(s=>s.classList.remove('on'));
@@ -384,9 +399,11 @@ function buildPalette(containerId, getColor, setColor){
     pal.querySelectorAll('.swatch').forEach(s=>s.setAttribute('aria-pressed','false'));
     picker.setAttribute('aria-pressed','true');
   });
-  picker.appendChild(input);
-  picker.innerHTML += '+';
-  pal.appendChild(picker);
+  picker.addEventListener('click', ()=>{
+    input.value = getColor();  // 현재 선택 색으로 초기화 후 열기
+    input.click();
+  });
+  document.body.appendChild(input);
 }
 buildPalette('palette', ()=>activeColor, (hex)=>{ activeColor=hex; window.__fluidInkColor=hex; });
 buildPalette('trailPalette', ()=>activeTrailColor, (hex)=>{ activeTrailColor=hex; window.__fluidTrailColor=hex; });
@@ -518,11 +535,24 @@ bindSlider('size','sizeM','sizeV','sizeMV', v=>{
   applySizeScale();
 });
 
-/* fps + res tag (실제 렌더링 프레임 기준) */
-let frames=0,lastFps=performance.now();
-function countFrame(){ frames++; requestAnimationFrame(countFrame); }
-requestAnimationFrame(countFrame);
-setInterval(()=>{ const now=performance.now(); const fps=Math.round(frames*1000/(now-lastFps)); document.getElementById('fps').textContent=fps+' fps'; frames=0; lastFps=now; },1000);
+/* res tag + debug FPS (실제 WebGL render 기준)
+   별도 RAF 루프는 실제 render와 무관하므로 사용하지 않음.
+   fluid.js의 render() 실행 횟수를 delta로 계산 (pause 시 0으로 표시) */
+let lastFps=performance.now(), lastRenderCount=0;
+const fpsEl = document.getElementById('fps');
+const isDebug = new URLSearchParams(location.search).has('debug');
+const resTagEl = document.getElementById('resTag');
+if (isDebug) {
+  if (fpsEl) fpsEl.hidden = false;
+  if (resTagEl) resTagEl.hidden = false;
+}
+setInterval(()=>{
+  const now=performance.now();
+  const count = (typeof window.__renderFrameCount==='function') ? window.__renderFrameCount() : 0;
+  const fps = Math.round((count-lastRenderCount)*1000/(now-lastFps));
+  if (fpsEl) fpsEl.textContent = fps+' fps';
+  lastFps=now; lastRenderCount=count;
+},1000);
 function updateResTag(){
   $resTag.textContent = Math.round(edgeSize())+'px · 굵기 '+Math.round(sizeScale()*100)+'%';
 }

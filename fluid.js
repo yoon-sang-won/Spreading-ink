@@ -75,6 +75,8 @@ function pointerPrototype () {
     this.texcoordY = 0;
     this.prevTexcoordX = 0;
     this.prevTexcoordY = 0;
+    this.startTexcoordX = 0;   // down 시점 좌표 (클릭/드래그 판단용)
+    this.startTexcoordY = 0;
     this.deltaX = 0;
     this.deltaY = 0;
     this.speed = 0;          // 최근 이동 속도 (velocity 기반 미세 모션용)
@@ -1088,6 +1090,7 @@ initFramebuffers();
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
 let frameNeedsRender = false;   // pause 중에도 UI/입력 변경 시 한 번 렌더링
+let renderFrameCount = 0;       // 실제 render() 실행 횟수 (FPS 측정용)
 update();
 
 function update () {
@@ -1105,8 +1108,10 @@ function update () {
         step(dt);
     // Pause 중에는 화면이 변하지 않으므로 렌더링 생략 (GPU 부하 절감).
     // Resume 시 다음 프레임에서 자연스럽게 이어짐.
-    if (!config.PAUSED || frameNeedsRender)
+    if (!config.PAUSED || frameNeedsRender) {
         render(null);
+        renderFrameCount++;
+    }
     frameNeedsRender = false;
     requestAnimationFrame(update);
 }
@@ -1405,9 +1410,7 @@ canvas.addEventListener('mousedown', e => {
     if (pointer == null)
         pointer = new pointerPrototype();
     updatePointerDownData(pointer, -1, posX, posY);
-    // 데스크톱 클릭 = 잉크 방울 (모바일 탭과 동일한 감각)
-    const rect = canvas.getBoundingClientRect();
-    splat((e.clientX - rect.left) / rect.width, 1.0 - (e.clientY - rect.top) / rect.height, 0, 0, generateColor());
+    // 클릭 splat은 mouseup에서 이동 거리를 보고 판단 (드래그 시작점 blob 방지)
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -1419,7 +1422,16 @@ canvas.addEventListener('mousemove', e => {
 });
 
 window.addEventListener('mouseup', () => {
-    updatePointerUpData(pointers[0]);
+    const p = pointers[0];
+    if (!p.down) return;
+    // 3~5px 이하로 움직였으면 클릭으로 간주 → 잉크 방울 생성
+    const rect = canvas.getBoundingClientRect();
+    const moved = Math.abs(p.texcoordX - p.startTexcoordX) * rect.width +
+                  Math.abs(p.texcoordY - p.startTexcoordY) * rect.height;
+    if (moved < 6) {
+        splat(p.texcoordX, p.texcoordY, 0, 0, generateColor());
+    }
+    updatePointerUpData(p);
 });
 
 canvas.addEventListener('touchstart', e => {
@@ -1469,6 +1481,8 @@ function updatePointerDownData (pointer, id, posX, posY) {
     pointer.texcoordY = 1.0 - posY / canvas.height;
     pointer.prevTexcoordX = pointer.texcoordX;
     pointer.prevTexcoordY = pointer.texcoordY;
+    pointer.startTexcoordX = pointer.texcoordX;
+    pointer.startTexcoordY = pointer.texcoordY;
     pointer.deltaX = 0;
     pointer.deltaY = 0;
     pointer.color = generateTrailColor();
@@ -1610,6 +1624,9 @@ function clearFluid () {
 }
 
 window.clearFluid = clearFluid;
+
+/* 실제 render 기준 FPS 카운터 (index.html에서 읽음) */
+window.__renderFrameCount = () => renderFrameCount;
 
 function scaleByPixelRatio (input) {
     // 화질/성능 균형: 레티나(DPR 2)에서도 최대 1.5배까지만 렌더링.
