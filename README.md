@@ -133,6 +133,7 @@ The project has no runtime dependencies. The only external reference is the MIT-
 ├── index.html              # UI, controls, interaction wiring
 ├── fluid.js                # Simulation + interaction layer (based on WebGL Fluid Simulation)
 ├── assets/preview.gif      # README preview capture
+├── assets/social-preview.png  # GitHub social preview (1280×640)
 ├── README.md
 ├── LICENSE
 ├── THIRD_PARTY_NOTICES.md
