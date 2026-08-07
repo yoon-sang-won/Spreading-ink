@@ -31,12 +31,12 @@ resizeCanvas();
 
 let config = {
     SIM_RESOLUTION: 128,
-    DYE_RESOLUTION: 1024,
+    DYE_RESOLUTION: 768,
     CAPTURE_RESOLUTION: 512,
     DENSITY_DISSIPATION: 0.32,
     VELOCITY_DISSIPATION: 0.22,
     PRESSURE: 0.8,
-    PRESSURE_ITERATIONS: 20,
+    PRESSURE_ITERATIONS: 12,
     CURL: 26,
     SPLAT_RADIUS: 0.30,
     SPLAT_FORCE: 6500,
@@ -49,8 +49,8 @@ let config = {
     BLOOM: true,
     BLOOM_ITERATIONS: 8,
     BLOOM_RESOLUTION: 256,
-    BLOOM_INTENSITY: 0.3,
-    BLOOM_THRESHOLD: 0.6,
+    BLOOM_INTENSITY: 0.15,
+    BLOOM_THRESHOLD: 0.78,
     BLOOM_SOFT_KNEE: 0.7,
     SUNRAYS: false,
     SUNRAYS_RESOLUTION: 196,
@@ -503,6 +503,8 @@ const displayShaderSource = `
         c += bloom;
     #endif
 
+        // soft tonemap: compress highlights to prevent white blowout while keeping mid-tones
+        c = c / (c + vec3(0.6));
         float a = max(c.r, max(c.g, c.b));
         gl_FragColor = vec4(c, a);
     }
@@ -1350,7 +1352,8 @@ function splat (x, y, dx, dy, color) {
     velocity.swap();
 
     gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
-    gl.uniform3f(splatProgram.uniforms.color, color.r, color.g, color.b);
+    // mild dampening: keeps drag strokes vivid while preventing white blowout
+    gl.uniform3f(splatProgram.uniforms.color, color.r * 0.72, color.g * 0.72, color.b * 0.72);
     blit(dye.write);
     dye.swap();
 }
@@ -1470,9 +1473,9 @@ function correctDeltaY (delta) {
 function generateColor () {
     // olive-ink, brighter so it reads on screen
     let c = HSVtoRGB(0.24 + Math.random() * 0.05, 0.75, 0.88);
-    c.r *= 0.48;
-    c.g *= 0.48;
-    c.b *= 0.48;
+    c.r *= 0.34;
+    c.g *= 0.34;
+    c.b *= 0.34;
     return c;
 }
 
