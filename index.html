@@ -168,6 +168,7 @@
       background:rgba(16,18,20,.88);backdrop-filter:blur(22px) saturate(1.2);
       border-top:1px solid rgba(255,255,255,.12);border-radius:20px 20px 0 0;
       padding:16px 18px calc(16px + env(safe-area-inset-bottom));
+      max-height:min(75vh, 640px);overflow-y:auto;-webkit-overflow-scrolling:touch;
       box-shadow:0 -12px 40px rgba(0,0,0,.6);
       transition:transform .3s cubic-bezier(.2,.8,.3,1);
     }
@@ -221,15 +222,6 @@
 
 <div class="hint" id="hint">드래그하면 잉크가 흘러요 · 탭하면 잉크 방울 · <span class="kbd-hint">P 일시정지 · Space 뿌리기</span></div>
 <button class="menu-dots" id="menuBtn" title="설정" aria-label="설정 메뉴"><span></span><span></span><span></span></button>
-
-<!-- 데스크톱 About 패널 -->
-<div class="about" id="aboutPanel" role="dialog" aria-label="작품 정보">
-  <h2>Natural Instability</h2>
-  <div class="sub">자연스러운 불안정함 — Interactive WebGL Fluid Study</div>
-  <p>Fluid simulation based on <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">Pavel Dobryakov's MIT-licensed WebGL fluid implementation</a>.</p>
-  <p>Interaction design, dual-color ink/trail system, responsive UI, visual customization and additional interaction implementation by the project author.</p>
-  <p><a href="https://github.com/yoon-sang-won/Spreading-ink" target="_blank" rel="noopener">GitHub ↗</a></p>
-</div>
 
 <div class="controls" id="controls">
   <div class="row">
@@ -292,6 +284,14 @@
       <button class="btn" id="neonBtnM" onclick="toggleNeon()" title="네온사인 필터">네온사인</button>
       <button class="btn" onclick="toggleAbout()" title="작품 정보">About</button>
     </div>
+  </div>
+  <!-- About 패널 (모바일: drawer 내부 expandable section / 데스크톱: 우측 플로팅) -->
+  <div class="about" id="aboutPanel" role="dialog" aria-label="작품 정보">
+    <h2>Natural Instability</h2>
+    <div class="sub">자연스러운 불안정함 — Interactive WebGL Fluid Study</div>
+    <p>Fluid simulation based on <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">Pavel Dobryakov's MIT-licensed WebGL fluid implementation</a>.</p>
+    <p>Interaction design, dual-color ink/trail system, responsive UI, visual customization and additional interaction implementation by the project author.</p>
+    <p><a href="https://github.com/yoon-sang-won/Spreading-ink" target="_blank" rel="noopener">GitHub ↗</a></p>
   </div>
 </div>
 
@@ -463,14 +463,17 @@ function togglePause(){ config.PAUSED=!config.PAUSED; document.getElementById('p
    P: 일시정지 토글 / Space: 잉크 뿌리기
    입력 중(버튼/슬라이더 포커스)에는 단축키 비활성화해 충돌 방지 */
 window.addEventListener('keydown',e=>{
-  const tag=(document.activeElement&&document.activeElement.tagName)||'';
-  if(tag==='INPUT'||tag==='BUTTON'||tag==='TEXTAREA'||tag==='SELECT') return;
+  // 1) global dismiss: ESC는 focus 상태와 무관하게 항상 동작
   if(e.key==='Escape'){
     closeDrawer();
     const a=document.getElementById('aboutPanel');
     if(a) a.classList.remove('open');
     return;
   }
+  // 2) interactive element에 focus가 있으면 일반 shortcut 비활성화
+  const tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(tag==='INPUT'||tag==='BUTTON'||tag==='TEXTAREA'||tag==='SELECT') return;
+  // 3) 일반 shortcut
   if(e.code==='Space'){e.preventDefault();splatBurst();}
   if(e.code==='KeyP'){togglePause();}
 });
@@ -480,6 +483,9 @@ function openDrawer(){
   const d=document.getElementById('drawer'), b=document.getElementById('drawerBackdrop');
   if(d) d.classList.add('open');
   if(b) b.classList.add('open');
+  // 모바일: About 패널이 drawer 밖(body)에 있으면 drawer 안으로 복귀
+  const a=document.getElementById('aboutPanel');
+  if (a && a.parentElement !== d && d) d.appendChild(a);
 }
 function closeDrawer(){
   const d=document.getElementById('drawer'), b=document.getElementById('drawerBackdrop');
@@ -509,8 +515,16 @@ function toggleAbout(){
   a.classList.toggle('open');
   // 데스크톱: About 열면 컨트롤도 함께 표시 (일관된 UI 노출)
   if (window.innerWidth > 700) {
+    // 데스크톱에서는 drawer(display:none) 밖으로 옮겨 플로팅 패널로 표시
+    if (a.classList.contains('open') && a.parentElement.id === 'drawer')
+      document.body.appendChild(a);
     const c = document.getElementById('controls');
     if (c) c.classList.add('show');
+  } else {
+    // 모바일: drawer 내부 section으로 복귀
+    const drawer = document.getElementById('drawer');
+    if (!a.classList.contains('open') && drawer && a.parentElement !== drawer)
+      drawer.appendChild(a);
   }
 }
 

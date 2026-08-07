@@ -80,6 +80,7 @@ function pointerPrototype () {
     this.deltaX = 0;
     this.deltaY = 0;
     this.speed = 0;          // 최근 이동 속도 (velocity 기반 미세 모션용)
+    this.dragStarted = false; // threshold 넘어서 drag가 시작됐는지 (click/drag 분리)
     this.down = false;
     this.moved = false;
     this.color = [30, 0, 300];
@@ -1424,11 +1425,8 @@ canvas.addEventListener('mousemove', e => {
 window.addEventListener('mouseup', () => {
     const p = pointers[0];
     if (!p.down) return;
-    // 3~5px 이하로 움직였으면 클릭으로 간주 → 잉크 방울 생성
-    const rect = canvas.getBoundingClientRect();
-    const moved = Math.abs(p.texcoordX - p.startTexcoordX) * rect.width +
-                  Math.abs(p.texcoordY - p.startTexcoordY) * rect.height;
-    if (moved < 6) {
+    // drag가 시작되지 않았으면 click으로 간주 → 잉크 방울 1회
+    if (!p.dragStarted) {
         splat(p.texcoordX, p.texcoordY, 0, 0, generateColor());
     }
     updatePointerUpData(p);
@@ -1485,6 +1483,8 @@ function updatePointerDownData (pointer, id, posX, posY) {
     pointer.startTexcoordY = pointer.texcoordY;
     pointer.deltaX = 0;
     pointer.deltaY = 0;
+    pointer.speed = 0;          // 새 stroke는 이전 stroke의 velocity와 독립적으로 시작
+    pointer.dragStarted = false;
     pointer.color = generateTrailColor();
 }
 
@@ -1495,7 +1495,16 @@ function updatePointerMoveData (pointer, posX, posY) {
     pointer.texcoordY = 1.0 - posY / canvas.height;
     pointer.deltaX = correctDeltaX(pointer.texcoordX - pointer.prevTexcoordX);
     pointer.deltaY = correctDeltaY(pointer.texcoordY - pointer.prevTexcoordY);
-    pointer.moved = Math.abs(pointer.deltaX) > 0 || Math.abs(pointer.deltaY) > 0;
+    // click/drag 분리: threshold(6px)를 넘어야 drag 시작.
+    // threshold 전에는 moved=false 유지 → click candidate 중 trail splat 없음.
+    if (!pointer.dragStarted) {
+        const rect = canvas.getBoundingClientRect();
+        const dist = Math.abs(pointer.texcoordX - pointer.startTexcoordX) * rect.width +
+                     Math.abs(pointer.texcoordY - pointer.startTexcoordY) * rect.height;
+        if (dist >= 6) pointer.dragStarted = true;
+    }
+    pointer.moved = pointer.dragStarted &&
+                    (Math.abs(pointer.deltaX) > 0 || Math.abs(pointer.deltaY) > 0);
     // 이동 속도 추적 (smooth하게): 빠른 드래그는 더 강한 velocity, 느린 드래그는 더 두꺼운 잉크
     const inst = Math.sqrt(pointer.deltaX * pointer.deltaX + pointer.deltaY * pointer.deltaY);
     pointer.speed = pointer.speed * 0.7 + inst * 0.3;
