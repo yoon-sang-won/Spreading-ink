@@ -57,6 +57,18 @@ let config = {
     SUNRAYS_WEIGHT: 1.0,
 }
 
+/* ---- prefers-reduced-motion 대응 ----
+   모션을 제거하지 않고 강도만 낮춤: curl/force 감소, bloom 약화, 초기 페이드 억제.
+   사용자가 직접 인터랙션하면 제한된 범위에서 모션을 경험할 수 있음. */
+const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (prefersReducedMotion) {
+    config.CURL = 12;                 // 왜곡 감소
+    config.SPLAT_FORCE = 1200;        // 드래그 force 감소
+    config.BLOOM_INTENSITY = 0.08;    // 글로우 약화
+    config.BLOOM_ITERATIONS = 2;
+}
+window.__reducedMotion = prefersReducedMotion;
+
 function pointerPrototype () {
     this.id = -1;
     this.texcoordX = 0;
@@ -65,6 +77,7 @@ function pointerPrototype () {
     this.prevTexcoordY = 0;
     this.deltaX = 0;
     this.deltaY = 0;
+    this.speed = 0;          // 최근 이동 속도 (velocity 기반 미세 모션용)
     this.down = false;
     this.moved = false;
     this.color = [30, 0, 300];
@@ -1074,6 +1087,7 @@ initFramebuffers();
 
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
+let frameNeedsRender = false;   // pause 중에도 UI/입력 변경 시 한 번 렌더링
 update();
 
 function update () {
@@ -1083,12 +1097,17 @@ function update () {
     if (resizeCanvas() || config.DYE_RESOLUTION !== dyeTarget) {
         config.DYE_RESOLUTION = dyeTarget;
         initFramebuffers();
+        frameNeedsRender = true;
     }
     updateColors(dt);
     applyInputs();
     if (!config.PAUSED)
         step(dt);
-    render(null);
+    // Pause 중에는 화면이 변하지 않으므로 렌더링 생략 (GPU 부하 절감).
+    // Resume 시 다음 프레임에서 자연스럽게 이어짐.
+    if (!config.PAUSED || frameNeedsRender)
+        render(null);
+    frameNeedsRender = false;
     requestAnimationFrame(update);
 }
 
@@ -1131,6 +1150,7 @@ function applyInputs () {
         if (p.moved) {
             p.moved = false;
             splatPointer(p);
+            frameNeedsRender = true;
         }
     });
 }
@@ -1328,7 +1348,13 @@ function blur (target, temp, iterations) {
 function splatPointer (pointer) {
     let dx = pointer.deltaX * config.SPLAT_FORCE;
     let dy = pointer.deltaY * config.SPLAT_FORCE;
-    splat(pointer.texcoordX, pointer.texcoordY, dx, dy, pointer.color);
+    // 미세 모션: 속도에 따라 굵기/힘을 아주 살짝 변화 (느린=묵직, 빠른=가늘게 길게)
+    // 과장되지 않도록 ±15% 범위 내에서만 조정
+    const v = pointer.speed;
+    const speedFactor = Math.min(1, v * 140);        // 0~1
+    const sizeMod = 1 + (1 - speedFactor) * 0.12;    // 느릴수록 두껍게 (+12% max)
+    const forceMod = 1 + speedFactor * 0.18;         // 빠를수록 강하게 (+18% max)
+    splat(pointer.texcoordX, pointer.texcoordY, dx * forceMod, dy * forceMod, pointer.color, sizeMod);
 }
 
 function multipleSplats (amount) {
@@ -1342,10 +1368,10 @@ function multipleSplats (amount) {
     }
 }
 
-function splat (x, y, dx, dy, color) {
+function splat (x, y, dx, dy, color, sizeMod) {
     // resolution-aware ink size: set by index.html (0.55 on mobile ~ 1.0 on desktop)
     const sizeScale = (typeof window.__fluidSizeScale === 'number') ? window.__fluidSizeScale : 1.0;
-    const radius = correctRadius((config.SPLAT_RADIUS / 100.0) * sizeScale);
+    const radius = correctRadius((config.SPLAT_RADIUS / 100.0) * sizeScale * (sizeMod || 1));
     const forceScale = sizeScale;
     splatProgram.bind();
     gl.uniform1i(splatProgram.uniforms.uTarget, velocity.read.attach(0));
@@ -1358,10 +1384,11 @@ function splat (x, y, dx, dy, color) {
 
     gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
     // mild dampening: keeps drag strokes vivid while preventing white blowout
-        const inkBoost = (window.__neonMode) ? 4.5 : 1.8;
+    const inkBoost = (window.__neonMode) ? 4.5 : 1.8;
     gl.uniform3f(splatProgram.uniforms.color, color.r * inkBoost, color.g * inkBoost, color.b * inkBoost);
     blit(dye.write);
     dye.swap();
+    frameNeedsRender = true;
 }
 
 function correctRadius (radius) {
@@ -1378,6 +1405,9 @@ canvas.addEventListener('mousedown', e => {
     if (pointer == null)
         pointer = new pointerPrototype();
     updatePointerDownData(pointer, -1, posX, posY);
+    // 데스크톱 클릭 = 잉크 방울 (모바일 탭과 동일한 감각)
+    const rect = canvas.getBoundingClientRect();
+    splat((e.clientX - rect.left) / rect.width, 1.0 - (e.clientY - rect.top) / rect.height, 0, 0, generateColor());
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -1404,6 +1434,7 @@ canvas.addEventListener('touchstart', e => {
         updatePointerDownData(pointers[i + 1], touches[i].identifier, posX, posY);
         // immediate ink drop on touch for snappier mobile feel
         splat((touches[i].pageX - rect.left) / rect.width, 1.0 - (touches[i].pageY - rect.top) / rect.height, 0, 0, generateColor());
+        frameNeedsRender = true;
     }
 });
 
@@ -1430,13 +1461,6 @@ window.addEventListener('touchend', e => {
     }
 });
 
-window.addEventListener('keydown', e => {
-    if (e.code === 'KeyP')
-        config.PAUSED = !config.PAUSED;
-    if (e.key === ' ')
-        splatStack.push(parseInt(Math.random() * 20) + 5);
-});
-
 function updatePointerDownData (pointer, id, posX, posY) {
     pointer.id = id;
     pointer.down = true;
@@ -1458,6 +1482,9 @@ function updatePointerMoveData (pointer, posX, posY) {
     pointer.deltaX = correctDeltaX(pointer.texcoordX - pointer.prevTexcoordX);
     pointer.deltaY = correctDeltaY(pointer.texcoordY - pointer.prevTexcoordY);
     pointer.moved = Math.abs(pointer.deltaX) > 0 || Math.abs(pointer.deltaY) > 0;
+    // 이동 속도 추적 (smooth하게): 빠른 드래그는 더 강한 velocity, 느린 드래그는 더 두꺼운 잉크
+    const inst = Math.sqrt(pointer.deltaX * pointer.deltaX + pointer.deltaY * pointer.deltaY);
+    pointer.speed = pointer.speed * 0.7 + inst * 0.3;
 }
 
 function updatePointerUpData (pointer) {

@@ -8,3 +8,6 @@ node_modules/
 
 # Command Code
 .commandcode/
+
+# Local test artifacts
+_ct*/
