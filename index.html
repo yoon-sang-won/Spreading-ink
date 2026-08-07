@@ -98,7 +98,8 @@
   /* ---- MOBILE ---- */
   @media (max-width: 700px){
     .hint{top:10px;font-size:10px;padding:6px 12px}
-    .menu-dots{top:10px;right:12px}
+    .menu-dots{top:10px;right:10px;padding:12px;gap:6px}
+    .menu-dots span{width:5px;height:5px}
     .controls{bottom:calc(10px + env(safe-area-inset-bottom));width:calc(100vw - 12px);border-radius:18px;padding:12px 14px 14px;gap:8px}
     .controls .row{gap:8px}
     .ctl{min-width:0;gap:8px}
@@ -119,7 +120,7 @@
       border:1px solid rgba(255,255,255,.12);border-radius:999px;
       padding:8px 10px;box-shadow:0 12px 40px rgba(0,0,0,.5);
     }
-    .mini-bar .btn{padding:8px 12px;font-size:11px}
+    .mini-bar .btn{padding:10px 14px;font-size:13px;min-height:42px}
     .controls{display:none}
     /* 필터 드로어 (햄버거로 열림) */
     .drawer{
@@ -144,9 +145,14 @@
     .drawer input[type=range]{width:100%;min-width:0;height:5px}
     .drawer .palette{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .drawer .plabel{font-size:11px;color:#E2E2E6;font-weight:500;white-space:nowrap;margin-right:2px}
-    .drawer .swatch{width:28px;height:28px}
-    .drawer .actions{display:flex;gap:8px;flex-wrap:wrap}
-    .drawer .btn{padding:8px 12px;font-size:11px}
+    .drawer .swatch{width:36px;height:36px}
+    .drawer .swatch.picker{font-size:16px}
+    .drawer .ctl label{font-size:13px}
+    .drawer .ctl .val{width:26px;font-size:13px}
+    .drawer input[type=range]::-webkit-slider-thumb{width:24px;height:24px}
+    .drawer input[type=range]{height:6px}
+    .drawer .actions{display:flex;gap:10px;flex-wrap:wrap}
+    .drawer .btn{padding:14px 20px;font-size:14px;min-height:48px;flex:1;display:flex;align-items:center;justify-content:center}
     .drawer-backdrop{
       position:fixed;inset:0;z-index:15;background:rgba(0,0,0,.4);
       display:block;
@@ -232,6 +238,24 @@
   </div>
 </div>
 
+<script>
+/* ---- resolution-adaptive dye (fluid.js 로드 전에 설정) ----
+   화면이 클수록 dye를 낮춰 렌더링 부하 제한.
+   시뮬레이션 해상도 SIM은 유지되어 유체 물리 품질은 보존. */
+function edgeSize(){
+  return Math.max(window.innerWidth, window.innerHeight);
+}
+function pickDyeRes(){
+  const e = Math.max(window.innerWidth, window.innerHeight);
+  let res = 896;
+  if (e >= 2200) res = 768;        // 4K급 화면
+  else if (e >= 1500) res = 768;   // 2K급 (2560px): 화질 유지
+  else if (e <= 700) res = 576;    // 모바일
+  return res;
+}
+window.__dyeRes = pickDyeRes();
+window.addEventListener('resize', ()=>{ window.__dyeRes = pickDyeRes(); });
+</script>
 <script src="fluid.js"></script>
 <script>
 /* ---- resolution-aware ink size ----
@@ -394,18 +418,17 @@ bindSlider('size','sizeM','sizeV','sizeMV', v=>{
   applySizeScale();
 });
 
-/* fps + res tag */
+/* fps + res tag (실제 렌더링 프레임 기준) */
 let frames=0,lastFps=performance.now();
+function countFrame(){ frames++; requestAnimationFrame(countFrame); }
+requestAnimationFrame(countFrame);
 setInterval(()=>{ const now=performance.now(); const fps=Math.round(frames*1000/(now-lastFps)); document.getElementById('fps').textContent=fps+' fps'; frames=0; lastFps=now; },1000);
-setInterval(()=>{frames++;},1);
 function updateResTag(){
   $resTag.textContent = Math.round(edgeSize())+'px · 굵기 '+Math.round(sizeScale()*100)+'%';
 }
 updateResTag();
 window.addEventListener('resize', updateResTag);
 
-/* mobile: lower dye res for perf */
-if (isMobile()) config.DYE_RESOLUTION = 512;
 </script>
 </body>
 </html>

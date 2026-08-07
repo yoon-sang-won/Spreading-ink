@@ -31,7 +31,7 @@ resizeCanvas();
 
 let config = {
     SIM_RESOLUTION: 256,
-    DYE_RESOLUTION: 768,
+    DYE_RESOLUTION: (typeof window.__dyeRes === 'number') ? window.__dyeRes : 768,
     CAPTURE_RESOLUTION: 512,
     DENSITY_DISSIPATION: 0.45,
     VELOCITY_DISSIPATION: 0.22,
@@ -40,15 +40,15 @@ let config = {
     CURL: 26,
     SPLAT_RADIUS: 0.16,
     SPLAT_FORCE: 1800,
-    SHADING: true,
+    SHADING: false,
     COLORFUL: false,
     COLOR_UPDATE_SPEED: 10,
     PAUSED: false,
     BACK_COLOR: { r: 0, g: 0, b: 0 },
     TRANSPARENT: false,
     BLOOM: true,
-    BLOOM_ITERATIONS: 8,
-    BLOOM_RESOLUTION: 256,
+    BLOOM_ITERATIONS: 4,
+    BLOOM_RESOLUTION: 128,
     BLOOM_INTENSITY: 0.15,
     BLOOM_THRESHOLD: 0.78,
     BLOOM_SOFT_KNEE: 0.7,
@@ -76,9 +76,6 @@ pointers.push(new pointerPrototype());
 
 const { gl, ext } = getWebGLContext(canvas);
 
-if (isMobile()) {
-    config.DYE_RESOLUTION = 512;
-}
 if (!ext.supportLinearFiltering) {
     config.DYE_RESOLUTION = 512;
     config.SHADING = false;
@@ -87,7 +84,7 @@ if (!ext.supportLinearFiltering) {
 }
 
 function getWebGLContext (canvas) {
-    const params = { alpha: true, depth: false, stencil: false, antialias: false, preserveDrawingBuffer: true };
+    const params = { alpha: true, depth: false, stencil: false, antialias: false, preserveDrawingBuffer: false };
 
     let gl = canvas.getContext('webgl2', params);
     const isWebGL2 = !!gl;
@@ -1081,8 +1078,12 @@ update();
 
 function update () {
     const dt = calcDeltaTime();
-    if (resizeCanvas())
+    // 화면 크기 또는 적응형 dye 해상도가 바뀌면 프레임버퍼 재생성
+    const dyeTarget = (typeof window.__dyeRes === 'number') ? window.__dyeRes : 768;
+    if (resizeCanvas() || config.DYE_RESOLUTION !== dyeTarget) {
+        config.DYE_RESOLUTION = dyeTarget;
         initFramebuffers();
+    }
     updateColors(dt);
     applyInputs();
     if (!config.PAUSED)
@@ -1584,7 +1585,12 @@ function clearFluid () {
 window.clearFluid = clearFluid;
 
 function scaleByPixelRatio (input) {
-    let pixelRatio = window.devicePixelRatio || 1;
+    // 화질/성능 균형: 레티나(DPR 2)에서도 최대 1.5배까지만 렌더링.
+    // 화면이 클수록(픽셀 수가 많을수록) 렌더링 배율을 낮춰 프레임레이트 확보.
+    let pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+    const maxDim = Math.max(window.innerWidth, window.innerHeight);
+    if (maxDim > 2200) pixelRatio = Math.min(pixelRatio, 1.0);        // 4K급: 1:1
+    else if (maxDim > 1400) pixelRatio = Math.min(pixelRatio, 1.25);  // 2K급: 1.25배
     return Math.floor(input * pixelRatio);
 }
 
